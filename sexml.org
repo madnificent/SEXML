@@ -1,0 +1,271 @@
+#+BABEL: :tangle no :cache no :session yes :results silent :no-expand yes :noweb yes :exports code :padline yes
+SEXML
+
+s-expressions for xml is an extensible library which provides a sugar-sweet s-expression syntax for spitting out xml documents.  its initial use is as a converter for a given DTD. it creates a package which exports a function for each ELEMENT (that's an xml tag) in the DTD and translates each of the attributes in the ATTLIST of the ELEMENT into a lispy keyword.  this allows us to use a nice syntax for creating xml documents, based on the DTD to support.  aside from this, the system will become extensible through ContextL.
+
+SEXML currently doesn't aim to use everything we can distil from the DTD, it aims to get just enough information so we can easily generate the XML documents.  there's currently NO checking as to whether or not the generated document will be a valid DTD.  aside from that the library is mainly built in order to support web-standards like html and svg.  if there are any non-XML oddities which should to be supported, they likely aren't supported by default.
+
+* administration
+contains all sorts of administrative work.
+
+** asdf system
+trivial package for an open source library.  uses cl-ppcre.
+
+#+begin_src lisp :tangle sexml.asd
+  (asdf:defsystem :sexml
+    :name "S-Expressions for XML generation"
+    :author "Aad Versteden <madnificent@gmail.com>"
+    :version "0.0.1"
+    :maintainer "Aad Versteden <madnificent@gmail.com>"
+    :licence "MIT"
+    :description "s-expressions for xml is a library which provides a sugar-sweet s-expression syntax for spitting out xml documents based on a DTD"
+    :depends-on (cl-ppcre alexandria cxml)
+    :serial t
+    :components ((:file "packages")
+                 (:file "sexml")))
+#+end_src
+
+** packages
+sexml may generate new packages for the DTD's which it imports, however it will only use a single predefined package.
+
+#+begin_src lisp :tangle packages.lisp
+  (defpackage :sexml
+    (:use :cl-ppcre :cl :alexandria)
+    (:export #:support-dtd))
+#+end_src
+
+* sexml code structure
+sexml provides a simple way to create a new package from a given DTD.  we've split the handling of that function in a few chapters.  it boils down to the following:
+- support for creating, populating and exporting symbols in packages
+- support for distilling the correct lisp-name from an external name
+- support for distilling information from a DTD
+- stiching it all together for a final realization
+
+the following code-snippet describes how everything is in fact connected together.
+
+#+begin_src lisp :tangle sexml.lisp
+  (in-package :sexml)
+  
+  <<managing-symbols>>
+  
+  <<lisp-naming>>
+  
+  <<dtd-information>>
+  
+  <<hooking-everything-together>>
+#+end_src
+
+* hooking it all together
+:PROPERTIES:
+:noweb-ref: hooking-everything-together
+:END:
+this chapter describes how everything is connected together. leveraging from each of the used libraries.
+
+the first thing the library will do is create an object to manage all of the information in the DTD.  next up is creating a reference to a new package which will store each of the functions.  for each of the elements in the DTD we'll create a new function.  for each of the functions we'll create the argument list.  from the argument list a trivial implementation is used which should work for most tags.  we register each of the functions in the given package and export them.
+
+#+begin_src lisp
+  (eval-when (:compile-toplevel :load-toplevel :execute)
+    (defun mk-entity-function (entity elements sub-elements-p package)
+      (let ((sexp-entity (function-symbol entity package))
+            (sexp-elements (mapcar (rcurry #'argument-symbol :keyword) elements)))
+        `(progn
+           ;; ,(when (find :swank *features*)
+           ;;        `(defmethod swank-backend:generic-arglist ((elt (eql ',sexp-entity)))
+           ;;           '(&rest args &key ,@sexp-elements)))
+           (let ((key-translations ',(loop for key in sexp-elements
+                                        for expansion in elements
+                                        append (list key (name expansion)))))
+             (defun ,sexp-entity (&rest args)
+               (let* ((keys ,(if (null sub-elements-p)
+                                 `(loop for (a b) on args by #'cddr
+                                     append (list (getf key-translations a) b))
+                                 `(progn (loop while (keywordp (first args))
+                                        append (list (getf key-translations (pop args))
+                                                     (pop args)))))))
+                 (format nil ,(concatenate 'string
+                                           "<" (name entity) "~{ ~A=~S~}" (if sub-elements-p ">" "/>") ;; tag
+                                           (when sub-elements-p
+                                             "~{~A~}") ;; content
+                                           (when sub-elements-p
+                                             (concatenate 'string "</" (name entity) ">")))
+                         ,@(if (null sub-elements-p)
+                               (list 'keys)
+                               (list 'keys 'args))))))))))
+  
+  (defmacro support-dtd (file packagename)
+    (let ((dtd (mk-dtd-object file))
+          (package (mk-package-object packagename)))
+      (loop for element in (dtd-elements dtd)
+         do (package-exports-symbol package (mk-lisp-symbol (name element) package)))
+      `(progn ,(package-declaration package)
+          ,@(loop for element in (dtd-elements dtd)
+               for arguments = (attributes element)
+               for sub-elements-p = (subelements-p element)
+               collect (mk-entity-function element arguments sub-elements-p package)))))
+#+end_src
+
+* managing symbols
+:PROPERTIES:
+:noweb-ref: managing-symbols
+:END:
+symbol management boils down to creating a package when requested and providing a way to create a package definition so the package is defined in a way easier on the eyes.
+
+we can represent a package by the package itself as a first argument and the list of symbols which will need to be exported later.  with that in mind we implement the two functions which are used in the main block.
+
+#+begin_src lisp
+  (defun mk-package-object (name)
+    "creates a new package object"
+    (list (make-package name)))
+  
+  (defun package-exports-symbol (package symbol)
+    "makes sure package knows it needs to export symbol, and exports it"
+    (export symbol (first package))
+    (setf (cdr (last package)) (cons symbol nil))
+    symbol)
+  
+  (defun package-declaration (package)
+    "creates a definition for the package"
+    (let ((package (first package))
+          (exports (rest package)))
+      `(defpackage ,(package-name package)
+         (:export ,@exports))))
+#+end_src
+
+* lisp naming
+:PROPERTIES:
+:noweb-ref: lisp-naming
+:END:
+translates strings of external definitions into lispy strings.  very little is known about the external format by default, it can be roughly anything.  a best-effort stub has been implemented which translates external stuff to something that should look more or less like lisp code.
+
+#+begin_src lisp
+  (defun mk-lisp-symbol (entity package)
+    (when (listp package)
+      (setf package (first package)))
+    (when (packagep package)
+      (setf package (package-name package)))
+    (setf entity (cl-ppcre:regex-replace-all "\\(" entity "<"))
+    (setf entity (cl-ppcre:regex-replace-all "\\)" entity ">"))
+    (setf entity (cl-ppcre:regex-replace-all " " entity "-"))
+    (setf entity (cl-ppcre:regex-replace-all "_" entity "-"))
+    (setf entity (cl-ppcre:regex-replace-all ":" entity "."))
+    (setf entity (cl-ppcre:regex-replace-all "([a-z])([A-Z])" entity "\\1-\\2"))
+    (setf entity (string-upcase entity)) ;; this is portable, but doesn't work nice on modern-mode i assume
+    (intern entity (find-package package)))
+#+end_src
+
+* dtd information
+:PROPERTIES:
+:noweb-ref: dtd-information
+:END:
+parsing the dtd isn't particularly complex, but it is the most complex task around.  we don't aim to do anything especially fancy here, we use cl-ppcre to fetch the relevant pieces of information and just distill what's needed.
+
+** structure of a DTD
+the DTD contains thtree important informative types of information.
+- ELEMENT :: contains the definition of a tag.  we need to know the name of the tag and whether or not it's empty
+- ATTLIST :: the list of attributes a tag accepts and which values the attributes may have.  we need the list of attributes as strings for the keyword arguments of the function.
+- ENTITY :: a DTD specification may contain C-like macros.  they are literal (though nestable) expansions which can be used roughly anywhere.  they have a name to expand from and a string to expand to.
+
+** approach
+the real complexity in the DTD is expanding the entities.  we'll tackle the whole thing as follows:
+- read in the complete DTD and convert it to three lists.  one for the elements one for the attlist and one for the entities.
+- expand all entities internally, which means we'll only need to do one pass over the list of enties.
+- expand the entities in the element and attlist section.
+- parse the string content of element and attlist into objects for reference by the DTD.
+
+** model
+the model consists of the following:
+- DTD :: the DTD is given a readable file upon creation which will be parsed at that time.
+- ELEMENT :: an element contains its string name and a list of attribute-objects which the element accepts.
+- ATTRIBUTE :: an attribute consists of a string name.
+
+*** class definition
+
+#+begin_src lisp
+  
+  (defclass dtd ()
+    ((path :initarg :path :reader dtd-path)
+     (elements-hash :initform (make-hash-table :test 'equal) :accessor dtd-elements-hash))
+    (:documentation "Datastructure which contains all information of a DTD."))
+  
+  (defclass element ()
+    ((name :initarg :name :reader name)
+     (attributes :initform nil :accessor attributes)
+     (subelements-p :initarg :subelements-p :initform nil :accessor subelements-p)))
+  
+  (defclass attribute ()
+    ((name :initarg :name :reader name))
+    (:documentation "represents a possible attribute for an element"))
+  
+#+end_src
+
+*** correspondence to symbols
+elements and attributes have corresponding symbols.  they are accessible respectively through #'function-symbol and #'argument-symbol.  these are implemented here.
+
+#+begin_src lisp
+  
+  (defgeneric function-symbol (element package)
+    (:documentation "returns a symbol for the function of element in package")
+    (:method ((element element) package)
+      (mk-lisp-symbol (name element) package)))
+  
+  (defgeneric argument-symbol (attribute package)
+    (:documentation "returns a symbol for the argument which can be given to the attribute, imported in package")
+    (:method ((attribute attribute) package)
+      (mk-lisp-symbol (name attribute) package)))
+  
+#+end_src
+
+*** altering the dtd
+accessor methods for adding and finding elements in the dtd
+
+#+begin_src lisp
+  
+  (defmethod dtd-elements (dtd)
+    (loop for val being the hash-values of (dtd-elements-hash dtd)
+       collect val))
+  
+  (defmethod add-element ((dtd dtd) (element element))
+    (setf (gethash (name element) (dtd-elements-hash dtd))
+          element))
+  
+  (defmethod find-element ((dtd dtd) name-string)
+    (gethash name-string (dtd-elements-hash dtd)))
+  
+  (defmethod add-attribute ((element element) (attribute attribute))
+    (push attribute (attributes element)))
+
+#+end_src
+
+
+** parsing the DTD
+parsing the DTD is a royal pain in the arse, therefore we bow before the gods that made and maintain CXML.  thanks  Gilbert Baumann and David Lichteblau.  we also kindly accept that it's an LLGPL library as it's just too good for our purpose.
+
+*** hooking it together
+all the previous constructions need to be hooked together, so they generate a nice and complete DTD, based on the input file.
+
+#+begin_src lisp
+  
+  (defun mk-dtd-object (file)
+    (make-instance 'dtd :path file))
+  
+  (defclass dtd-sax-handler (sax:default-handler)
+    ((dtd :initarg :dtd :reader dtd))
+    (:documentation "sax handler which calls the correct methods on its DTD"))
+  
+  (defmethod sax:element-declaration ((handler dtd-sax-handler) name model)
+    (add-element (dtd handler)
+                 (make-instance 'element
+                                :name name
+                                :subelements-p (not (eq model :empty)))))
+  
+  (defmethod sax:attribute-declaration ((handler dtd-sax-handler) element-name attribute-name type default)
+    (declare (ignore type default))
+    (add-attribute (find-element (dtd handler) element-name)
+                   (make-instance 'attribute :name attribute-name)))
+  
+  
+  (defmethod initialize-instance :after ((dtd dtd) &key path &allow-other-keys)
+    (let ((handler (make-instance 'dtd-sax-handler :dtd dtd)))
+      (cxml:parse-dtd-file path handler)))
+  
+#+end_src
