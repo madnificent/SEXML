@@ -19,7 +19,7 @@ trivial package for an open source library.  uses cl-ppcre.
     :maintainer "Aad Versteden <madnificent@gmail.com>"
     :licence "MIT"
     :description "s-expressions for xml is a library which provides a sugar-sweet s-expression syntax for spitting out xml documents based on a DTD"
-    :depends-on (cl-ppcre alexandria cxml)
+    :depends-on (cl-ppcre alexandria cxml contextl)
     :serial t
     :components ((:file "packages")
                  (:file "sexml")))
@@ -30,7 +30,7 @@ sexml may generate new packages for the DTD's which it imports, however it will 
 
 #+begin_src lisp :tangle packages.lisp
   (defpackage :sexml
-    (:use :cl-ppcre :cl :alexandria)
+    (:use :cl-ppcre :alexandria :contextl-common-lisp)
     (:export #:support-dtd))
 #+end_src
 
@@ -64,44 +64,83 @@ this chapter describes how everything is connected together. leveraging from eac
 the first thing the library will do is create an object to manage all of the information in the DTD.  next up is creating a reference to a new package which will store each of the functions.  for each of the elements in the DTD we'll create a new function.  for each of the functions we'll create the argument list.  from the argument list a trivial implementation is used which should work for most tags.  we register each of the functions in the given package and export them.
 
 #+begin_src lisp
-  (eval-when (:compile-toplevel :load-toplevel :execute)
-    (defun mk-entity-function (entity elements sub-elements-p package)
-      (let ((sexp-entity (function-symbol entity package))
-            (sexp-elements (mapcar (rcurry #'argument-symbol :keyword) elements)))
-        `(progn
-           ;; ,(when (find :swank *features*)
-           ;;        `(defmethod swank-backend:generic-arglist ((elt (eql ',sexp-entity)))
-           ;;           '(&rest args &key ,@sexp-elements)))
-           (let ((key-translations ',(loop for key in sexp-elements
-                                        for expansion in elements
-                                        append (list key (name expansion)))))
-             (defun ,sexp-entity (&rest args)
-               (let* ((keys ,(if (null sub-elements-p)
-                                 `(loop for (a b) on args by #'cddr
-                                     append (list (getf key-translations a) b))
-                                 `(progn (loop while (keywordp (first args))
-                                        append (list (getf key-translations (pop args))
-                                                     (pop args)))))))
-                 (format nil ,(concatenate 'string
-                                           "<" (name entity) "~{ ~A=~S~}" (if sub-elements-p ">" "/>") ;; tag
-                                           (when sub-elements-p
-                                             "~{~A~}") ;; content
-                                           (when sub-elements-p
-                                             (concatenate 'string "</" (name entity) ">")))
-                         ,@(if (null sub-elements-p)
-                               (list 'keys)
-                               (list 'keys 'args))))))))))
+  (define-layered-function entity-definition-forms (entity package)
+    (:documentation "entity-definition-forms is called with an entity and package object (both defined in sexml).  it should return all forms needed to generate the functions.")
+    (:method (entity package)
+      (declare (ignore entity package))
+      nil))
+  
+  (deflayer export-function-symbol ())
+  (deflayer attributes-as-keywords ())
+  (deflayer swank-documented-attributes ())
+  (ensure-layer 'export-function-symbol)
+  (ensure-layer 'attributes-as-keywords)
+  
+  #+swank
+  (ensure-layer 'swank-documented-attributes)
+  
+  (define-layered-method entity-definition-forms
+    :in-layer swank-documented-attributes
+    :around (entity package)
+    (let* ((symbol (function-symbol entity package))
+           (attribute-symbols (mapcar (rcurry #'argument-symbol (car package))
+                                      (attributes entity)))
+           (attribute-keywords (mapcar (rcurry #'argument-symbol :keyword)
+                                       (attributes entity))))
+      `((defmethod swank:arglist-dispatch :around ((symbol (eql ',symbol)) arglist)
+          (let ((arglist (call-next-method)))
+            (setf (swank::arglist.keyword-args arglist)
+                  (loop for attr-sym in '(,@attribute-symbols)
+                     for attr-key in '(,@attribute-keywords)
+                     collect (swank::make-keyword-arg attr-key attr-sym nil)))
+            (setf (swank::arglist.rest arglist)
+                  'rest)
+            (setf (swank::arglist.key-p arglist) t)
+            arglist))
+        ,@(call-next-method))))
+  
+  (define-layered-method entity-definition-forms
+    :in-layer export-function-symbol
+    :around (entity package)
+    (let ((symbol (function-symbol entity package)))
+      `((export (quote ,symbol) (symbol-package (quote ,symbol)))
+        ,@(call-next-method))))
+  
+  (define-layered-method entity-definition-forms
+    :in-layer attributes-as-keywords
+    :around (entity package)
+    (let ((sexp-entity (function-symbol entity package))
+          (sexp-attributes (mapcar (rcurry #'argument-symbol :keyword)
+                                   (attributes entity))))
+      `((let* ((key-translations ',(loop for key in sexp-attributes
+                                      for expansion in (attributes entity)
+                                      append (list key (name expansion)))))
+          (defun ,sexp-entity (&rest args)
+            (let* ((keys ,(if (null (subelements-p entity))
+                              `(loop for (a b) on args by #'cddr
+                                  append (list (getf key-translations a) b))
+                              `(progn (loop while (keywordp (first args))
+                                     append (list (getf key-translations (pop args))
+                                                  (pop args)))))))
+              (format nil ,(concatenate 'string
+                                        "<" (name entity) "~{ ~A=~S~}" (if (subelements-p entity) ">" "/>") ;; tag
+                                        (when (subelements-p entity)
+                                          "~{~A~}") ;; content
+                                        (when (subelements-p entity)
+                                          (concatenate 'string "</" (name entity) ">")))
+                      ,@(if (null (subelements-p entity))
+                            (list 'keys)
+                            (list 'keys 'args))))))
+        ,@(call-next-method))))
   
   (defmacro support-dtd (file packagename)
     (let ((dtd (mk-dtd-object file))
           (package (mk-package-object packagename)))
-      (loop for element in (dtd-elements dtd)
-         do (package-exports-symbol package (mk-lisp-symbol (name element) package)))
-      `(progn ,(package-declaration package)
-          ,@(loop for element in (dtd-elements dtd)
-               for arguments = (attributes element)
-               for sub-elements-p = (subelements-p element)
-               collect (mk-entity-function element arguments sub-elements-p package)))))
+      ;; (loop for element in (dtd-elements dtd)
+      ;;    do (package-exports-symbol package (mk-lisp-symbol (name element) package)))
+      `(progn ; ,(package-declaration package)
+         ,@(loop for element in (dtd-elements dtd)
+              collect `(progn ,@(entity-definition-forms element package))))))
 #+end_src
 
 * managing symbols
@@ -115,7 +154,8 @@ we can represent a package by the package itself as a first argument and the lis
 #+begin_src lisp
   (defun mk-package-object (name)
     "creates a new package object"
-    (list (make-package name)))
+    (list (or (find-package name)
+             (make-package name))))
   
   (defun package-exports-symbol (package symbol)
     "makes sure package knows it needs to export symbol, and exports it"
@@ -220,20 +260,28 @@ accessor methods for adding and finding elements in the dtd
 
 #+begin_src lisp
   
-  (defmethod dtd-elements (dtd)
-    (loop for val being the hash-values of (dtd-elements-hash dtd)
-       collect val))
+  (defgeneric dtd-elements (dtd)
+    (:documentation "returns the elements of the document")
+    (:method (dtd)
+      (loop for val being the hash-values of (dtd-elements-hash dtd)
+         collect val)))
   
-  (defmethod add-element ((dtd dtd) (element element))
-    (setf (gethash (name element) (dtd-elements-hash dtd))
-          element))
+  (defgeneric add-element (dtd element)
+    (:documentation "adds <element> to the dtd>")
+    (:method ((dtd dtd) (element element))
+      (setf (gethash (name element) (dtd-elements-hash dtd))
+            element)))
   
-  (defmethod find-element ((dtd dtd) name-string)
-    (gethash name-string (dtd-elements-hash dtd)))
+  (defgeneric find-element (dtd name-string)
+    (:documentation "searches for the element representing <name-string> in the dtd")
+    (:method ((dtd dtd) name-string)
+      (gethash name-string (dtd-elements-hash dtd))))
   
-  (defmethod add-attribute ((element element) (attribute attribute))
-    (push attribute (attributes element)))
-
+  (defgeneric add-attribute (element attribute)
+    (:documentation "registers the existence of <attribute> for <element>.")
+    (:method ((element element) (attribute attribute))
+      (push attribute (attributes element))))
+  
 #+end_src
 
 

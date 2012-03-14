@@ -57,19 +57,27 @@
   (:method ((attribute attribute) package)
     (mk-lisp-symbol (name attribute) package)))
 
-(defmethod dtd-elements (dtd)
-  (loop for val being the hash-values of (dtd-elements-hash dtd)
-     collect val))
+(defgeneric dtd-elements (dtd)
+  (:documentation "returns the elements of the document")
+  (:method (dtd)
+    (loop for val being the hash-values of (dtd-elements-hash dtd)
+       collect val)))
 
-(defmethod add-element ((dtd dtd) (element element))
-  (setf (gethash (name element) (dtd-elements-hash dtd))
-        element))
+(defgeneric add-element (dtd element)
+  (:documentation "adds <element> to the dtd>")
+  (:method ((dtd dtd) (element element))
+    (setf (gethash (name element) (dtd-elements-hash dtd))
+          element)))
 
-(defmethod find-element ((dtd dtd) name-string)
-  (gethash name-string (dtd-elements-hash dtd)))
+(defgeneric find-element (dtd name-string)
+  (:documentation "searches for the element representing <name-string> in the dtd")
+  (:method ((dtd dtd) name-string)
+    (gethash name-string (dtd-elements-hash dtd))))
 
-(defmethod add-attribute ((element element) (attribute attribute))
-  (push attribute (attributes element)))
+(defgeneric add-attribute (element attribute)
+  (:documentation "registers the existence of <attribute> for <element>.")
+  (:method ((element element) (attribute attribute))
+    (push attribute (attributes element))))
 
 (defun mk-dtd-object (file)
   (make-instance 'dtd :path file))
@@ -95,33 +103,58 @@
     (cxml:parse-dtd-file path handler)))
 
 
+(define-layered-function entity-definition-forms (entity package)
+  (:documentation "entity-definition-forms is called with an entity and package object (both defined in sexml).  it should return all forms needed to generate the functions.")
+  (:method (entity package)
+    (declare (ignore entity package))
+    nil))
+
+(deflayer export-function-symbol ())
+(deflayer attributes-as-keywords ())
+
+;;(deflayer with-documented-attributes ())
+;; TODO: define with-documented-attributes
+;; ,(when (find :swank *features*)
+;;        `(defmethod swank-backend:generic-arglist ((elt (eql ',sexp-entity)))
+;;           '(&rest args &key ,@sexp-elements)))
+
+(define-layered-method entity-definition-forms
+  :in-layer export-function-symbol
+  :around (entity package)
+  (let ((symbol (function-symbol entity package)))
+    `((export ,symbol (symbol-package ,symbol))
+      ,@(call-next-method))))
+
+(define-layered-method entity-definition-forms
+  :in-layer attributes-as-keywords
+  :around (entity package)
+  (let ((sexp-entity (function-symbol entity package))
+        (sexp-attributes (mapcar (rcurry #'argument-symbol :keyword)
+                                 (attributes entity))))
+    `((let* ((key-translations ',(loop for key in sexp-attributes
+                                    for expansion in (attributes entity)
+                                    append (list key (name expansion)))))
+        (defun ,sexp-entity (&rest args)
+          (let* ((keys ,(if (null (subelements-p entity))
+                            `(loop for (a b) on args by #'cddr
+                                append (list (getf key-translations a) b))
+                            `(progn (loop while (keywordp (first args))
+                                   append (list (getf key-translations (pop args))
+                                                (pop args)))))))
+            (format nil ,(concatenate 'string
+                                      "<" (name entity) "~{ ~A=~S~}" (if (subelements-p entity) ">" "/>") ;; tag
+                                      (when (subelements-p entity)
+                                        "~{~A~}") ;; content
+                                      (when (subelements-p entity)
+                                        (concatenate 'string "</" (name entity) ">")))
+                    ,@(if (null (subelements-p entity))
+                          (list 'keys)
+                          (list 'keys 'args))))))
+      ,@(call-next-method))))
+
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (defun mk-entity-function (entity elements sub-elements-p package)
-    (let ((sexp-entity (function-symbol entity package))
-          (sexp-elements (mapcar (rcurry #'argument-symbol :keyword) elements)))
-      `(progn
-         ;; ,(when (find :swank *features*)
-         ;;        `(defmethod swank-backend:generic-arglist ((elt (eql ',sexp-entity)))
-         ;;           '(&rest args &key ,@sexp-elements)))
-         (let ((key-translations ',(loop for key in sexp-elements
-                                      for expansion in elements
-                                      append (list key (name expansion)))))
-           (defun ,sexp-entity (&rest args)
-             (let* ((keys ,(if (null sub-elements-p)
-                               `(loop for (a b) on args by #'cddr
-                                   append (list (getf key-translations a) b))
-                               `(progn (loop while (keywordp (first args))
-                                      append (list (getf key-translations (pop args))
-                                                   (pop args)))))))
-               (format nil ,(concatenate 'string
-                                         "<" (name entity) "~{ ~A=~S~}" (if sub-elements-p ">" "/>") ;; tag
-                                         (when sub-elements-p
-                                           "~{~A~}") ;; content
-                                         (when sub-elements-p
-                                           (concatenate 'string "</" (name entity) ">")))
-                       ,@(if (null sub-elements-p)
-                             (list 'keys)
-                             (list 'keys 'args))))))))))
+  (defun mk-entity-function (entity package)
+    `(progn ,@(entity-definition-forms entity package))))
 
 (defmacro support-dtd (file packagename)
   (let ((dtd (mk-dtd-object file))
@@ -130,6 +163,4 @@
        do (package-exports-symbol package (mk-lisp-symbol (name element) package)))
     `(progn ,(package-declaration package)
         ,@(loop for element in (dtd-elements dtd)
-             for arguments = (attributes element)
-             for sub-elements-p = (subelements-p element)
-             collect (mk-entity-function element arguments sub-elements-p package)))))
+             append (entity-definition-forms element package)))))
