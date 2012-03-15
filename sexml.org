@@ -31,7 +31,7 @@ sexml may generate new packages for the DTD's which it imports, however it will 
 #+begin_src lisp :tangle packages.lisp
   (defpackage :sexml
     (:use :cl-ppcre :alexandria :contextl-common-lisp)
-    (:export #:support-dtd))
+    (:export #:support-dtd #:with-compiletime-layers))
 #+end_src
 
 * sexml code structure
@@ -39,6 +39,7 @@ sexml provides a simple way to create a new package from a given DTD.  we've spl
 - support for creating, populating and exporting symbols in packages
 - support for distilling the correct lisp-name from an external name
 - support for distilling information from a DTD
+- support for customization by virtue of ContextL
 - stiching it all together for a final realization
 
 the following code-snippet describes how everything is in fact connected together.
@@ -46,6 +47,8 @@ the following code-snippet describes how everything is in fact connected togethe
 #+begin_src lisp :tangle sexml.lisp
   (in-package :sexml)
   
+  <<customization-support>>
+
   <<managing-symbols>>
   
   <<lisp-naming>>
@@ -53,6 +56,28 @@ the following code-snippet describes how everything is in fact connected togethe
   <<dtd-information>>
   
   <<hooking-everything-together>>
+#+end_src
+
+* customization support
+:PROPERTIES:
+:noweb-ref: customization-support
+:END:
+in order to provide extensions and changes to the base system, we use ContextL.  we want ContextL to specify contexts (in other words: options) which are enabled at compiletime.  this is not supported by standard, so we need to create a macro for this.
+
+macroexpansions always occur in the current environment.  however, to ensure that the functions which each nested macro-expansion call can make use of the activated layer, we need to ensure that the environment holds, for the whole time of the expansion/compilation.  we can force this by use of eval.
+
+#+begin_src lisp
+  
+  (defmacro with-compiletime-layers ((&rest layers) &body body)
+    (let ((layers-to-activate (loop for layer in layers
+                                 unless (contextl:layer-active-p layer)
+                                 collect layer)))
+      (mapcar #'contextl:ensure-active-layer layers-to-activate)
+      (dolist (bd body)
+        (eval bd))
+      (mapcar #'contextl:ensure-inactive-layer layers-to-activate)
+      nil))
+  
 #+end_src
 
 * hooking it all together
@@ -73,11 +98,11 @@ the first thing the library will do is create an object to manage all of the inf
   (deflayer export-function-symbol ())
   (deflayer attributes-as-keywords ())
   (deflayer swank-documented-attributes ())
-  (ensure-layer 'export-function-symbol)
-  (ensure-layer 'attributes-as-keywords)
+  ;(ensure-layer 'export-function-symbol)
+  ;(ensure-layer 'attributes-as-keywords)
   
-  #+swank
-  (ensure-layer 'swank-documented-attributes)
+  ;#+swank
+  ;(ensure-layer 'swank-documented-attributes)
   
   (define-layered-method entity-definition-forms
     :in-layer swank-documented-attributes
@@ -136,8 +161,6 @@ the first thing the library will do is create an object to manage all of the inf
   (defmacro support-dtd (file packagename)
     (let ((dtd (mk-dtd-object file))
           (package (mk-package-object packagename)))
-      ;; (loop for element in (dtd-elements dtd)
-      ;;    do (package-exports-symbol package (mk-lisp-symbol (name element) package)))
       `(progn ; ,(package-declaration package)
          ,@(loop for element in (dtd-elements dtd)
               collect `(progn ,@(entity-definition-forms element package))))))
@@ -283,7 +306,6 @@ accessor methods for adding and finding elements in the dtd
       (push attribute (attributes element))))
   
 #+end_src
-
 
 ** parsing the DTD
 parsing the DTD is a royal pain in the arse, therefore we bow before the gods that made and maintain CXML.  thanks  Gilbert Baumann and David Lichteblau.  we also kindly accept that it's an LLGPL library as it's just too good for our purpose.
