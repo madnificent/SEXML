@@ -91,6 +91,7 @@ the most important task is exposing the function's symbols.  this is done in the
 a function is built which knows each of the possible attributes.  the function is compiled in an environment which contains a property list with as key the keyword which the function has, and as value a string representing the attribute which should be printed.  it only has an &rest argument, as it accepts anything that's given to it and discovers what are key-value pairs and what is resting content.  the resulting forms are pushed to the list of methods needed to support this element.
 
 #+begin_src lisp
+  
   (deflayer sexml-functions ())
     
   (define-layered-method entity-definition-forms
@@ -105,19 +106,20 @@ a function is built which knows each of the possible attributes.  the function i
           (defun ,sexp-entity (&rest args)
             (let* ((keys ,(if (null (subelements-p entity))
                               `(loop for (a b) on args by #'cddr
-                                  append (list (getf key-translations a) b))
+                                  append (list (getf key-translations a)
+                                               (tag-attribute-content b)))
                               `(progn (loop while (keywordp (first args))
                                      append (list (getf key-translations (pop args))
-                                                  (pop args)))))))
+                                                  (tag-attribute-content (pop args))))))))
               (format nil ,(concatenate 'string
                                         "<" (name entity) "~{ ~A=~S~}" (if (subelements-p entity) ">" "/>") ;; tag
                                         (when (subelements-p entity)
-                                          "~{~A~}") ;; content
+                                          "~{~A~^ ~}") ;; content
                                         (when (subelements-p entity)
                                           (concatenate 'string "</" (name entity) ">")))
                       ,@(if (null (subelements-p entity))
                             (list 'keys)
-                            (list 'keys 'args))))))
+                            (list 'keys '(mapcar #'tag-body-content args)))))))
         ,@(call-next-method))))
     
 #+end_src
@@ -184,7 +186,7 @@ we simplify the use of sexml's standard xml notation by supplying a layer which 
 :END:
 this chapter describes how everything is connected together. leveraging from each of the used libraries.
 
-the first thing the library will do is create an object to manage all of the information in the DTD.  next up is creating a reference to a new package which will store each of the functions.  for each of the elements in the DTD we'll create a new function.  for each of the functions we'll create the argument list.  from the argument list a trivial implementation is used which should work for most tags.  we register each of the functions in the given package and export them.
+the first thing the library will do is create an object to manage all of the information in the DTD.  next up is creating a reference to a new package which will store each of the functions.  for each of the elements in the DTD we'll create a new function.  for each of the functions we'll create the argument list.  from the argument list a trivial implementation can be built which should work for most tags.  this is done in the layer specification.  we also introduce a layered function which helps in outputting the arguments which are given to the function.  by default, this provides support for printing lists of arguments as space separated content.
 
 #+begin_src lisp
   (define-layered-function entity-definition-forms (entity package)
@@ -192,6 +194,28 @@ the first thing the library will do is create an object to manage all of the inf
     (:method (entity package)
       (declare (ignore entity package))
       nil))
+  
+  (define-layered-function tag-attribute-content (content)
+    (:documentation "prints <content> in a way that it's a valid value for an attribute")
+    (:method (content)
+      (typecase content
+        (string
+         (cl-ppcre:regex-replace "\"" content "&quot;"))
+        (list
+         (tag-attribute-content (format nil "~{~A~^ ~}" content)))
+        (T (tag-body-content (format nil "~A" content))))))
+  
+  (define-layered-function tag-body-content (content)
+    (:documentation "prints <content> in a way appropriate for xml output.  output functions should use this in order to create correct output.")
+    (:method (content)
+      (typecase content
+        (string
+         (cl-ppcre:regex-replace
+          ">" (cl-ppcre:regex-replace "<" content "&lt;")
+          "&gt;"))
+        (list
+         (tag-body-content (format nil "~{~A~^ ~}" content)))
+        (T (tag-body-content (format nil "~A" content))))))
   
   (defmacro support-dtd (file packagename)
     (let ((dtd (mk-dtd-object file))

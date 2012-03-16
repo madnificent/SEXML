@@ -110,6 +110,28 @@
     (declare (ignore entity package))
     nil))
 
+(define-layered-function tag-attribute-content (content)
+  (:documentation "prints <content> in a way that it's a valid value for an attribute")
+  (:method (content)
+    (typecase content
+      (string
+       (cl-ppcre:regex-replace "\"" content "&quot;"))
+      (list
+       (tag-attribute-content (format nil "~{~A~^ ~}" content)))
+      (T (tag-body-content (format nil "~A" content))))))
+
+(define-layered-function tag-body-content (content)
+  (:documentation "prints <content> in a way appropriate for xml output.  output functions should use this in order to create correct output.")
+  (:method (content)
+    (typecase content
+      (string
+       (cl-ppcre:regex-replace
+        ">" (cl-ppcre:regex-replace "<" content "&lt;")
+        "&gt;"))
+      (list
+       (tag-body-content (format nil "~{~A~^ ~}" content)))
+      (T (tag-body-content (format nil "~A" content))))))
+
 (defmacro support-dtd (file packagename)
   (let ((dtd (mk-dtd-object file))
         (package (mk-package-object packagename)))
@@ -126,6 +148,7 @@
       (eval bd))
     (mapcar #'contextl:ensure-inactive-layer layers-to-activate)
     nil))
+
 (deflayer sexml-functions ())
   
 (define-layered-method entity-definition-forms
@@ -140,19 +163,20 @@
         (defun ,sexp-entity (&rest args)
           (let* ((keys ,(if (null (subelements-p entity))
                             `(loop for (a b) on args by #'cddr
-                                append (list (getf key-translations a) b))
+                                append (list (getf key-translations a)
+                                             (tag-attribute-content b)))
                             `(progn (loop while (keywordp (first args))
                                    append (list (getf key-translations (pop args))
-                                                (pop args)))))))
+                                                (tag-attribute-content (pop args))))))))
             (format nil ,(concatenate 'string
                                       "<" (name entity) "~{ ~A=~S~}" (if (subelements-p entity) ">" "/>") ;; tag
                                       (when (subelements-p entity)
-                                        "~{~A~}") ;; content
+                                        "~{~A~^ ~}") ;; content
                                       (when (subelements-p entity)
                                         (concatenate 'string "</" (name entity) ">")))
                     ,@(if (null (subelements-p entity))
                           (list 'keys)
-                          (list 'keys 'args))))))
+                          (list 'keys '(mapcar #'tag-body-content args)))))))
       ,@(call-next-method))))
   
 (deflayer export-function-symbol ())
