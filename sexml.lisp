@@ -1,18 +1,6 @@
 
 (in-package :sexml)
 
-
-(defmacro with-compiletime-layers ((&rest layers) &body body)
-  (let ((layers-to-activate (loop for layer in layers
-                               unless (contextl:layer-active-p layer)
-                               collect layer)))
-    (mapcar #'contextl:ensure-active-layer layers-to-activate)
-    (dolist (bd body)
-      (eval bd))
-    (mapcar #'contextl:ensure-inactive-layer layers-to-activate)
-    nil))
-
-
 (defun mk-package-object (name)
   "creates a new package object"
   (list (or (find-package name)
@@ -122,44 +110,26 @@
     (declare (ignore entity package))
     nil))
 
-(deflayer export-function-symbol ())
-(deflayer attributes-as-keywords ())
-(deflayer swank-documented-attributes ())
-;(ensure-layer 'export-function-symbol)
-;(ensure-layer 'attributes-as-keywords)
+(defmacro support-dtd (file packagename)
+  (let ((dtd (mk-dtd-object file))
+        (package (mk-package-object packagename)))
+    `(progn ,@(loop for element in (dtd-elements dtd)
+            collect `(progn ,@(entity-definition-forms element package))))))
 
-;#+swank
-;(ensure-layer 'swank-documented-attributes)
 
+(defmacro with-compiletime-active-layers ((&rest layers) &body body)
+  (let ((layers-to-activate (loop for layer in layers
+                               unless (contextl:layer-active-p layer)
+                               collect layer)))
+    (mapcar #'contextl:ensure-active-layer layers-to-activate)
+    (dolist (bd body)
+      (eval bd))
+    (mapcar #'contextl:ensure-inactive-layer layers-to-activate)
+    nil))
+(deflayer sexml-functions ())
+  
 (define-layered-method entity-definition-forms
-  :in-layer swank-documented-attributes
-  :around (entity package)
-  (let* ((symbol (function-symbol entity package))
-         (attribute-symbols (mapcar (rcurry #'argument-symbol (car package))
-                                    (attributes entity)))
-         (attribute-keywords (mapcar (rcurry #'argument-symbol :keyword)
-                                     (attributes entity))))
-    `((defmethod swank:arglist-dispatch :around ((symbol (eql ',symbol)) arglist)
-        (let ((arglist (call-next-method)))
-          (setf (swank::arglist.keyword-args arglist)
-                (loop for attr-sym in '(,@attribute-symbols)
-                   for attr-key in '(,@attribute-keywords)
-                   collect (swank::make-keyword-arg attr-key attr-sym nil)))
-          (setf (swank::arglist.rest arglist)
-                'rest)
-          (setf (swank::arglist.key-p arglist) t)
-          arglist))
-      ,@(call-next-method))))
-
-(define-layered-method entity-definition-forms
-  :in-layer export-function-symbol
-  :around (entity package)
-  (let ((symbol (function-symbol entity package)))
-    `((export (quote ,symbol) (symbol-package (quote ,symbol)))
-      ,@(call-next-method))))
-
-(define-layered-method entity-definition-forms
-  :in-layer attributes-as-keywords
+  :in-layer sexml-functions
   :around (entity package)
   (let ((sexp-entity (function-symbol entity package))
         (sexp-attributes (mapcar (rcurry #'argument-symbol :keyword)
@@ -184,10 +154,38 @@
                           (list 'keys)
                           (list 'keys 'args))))))
       ,@(call-next-method))))
+  
+(deflayer export-function-symbol ())
 
-(defmacro support-dtd (file packagename)
-  (let ((dtd (mk-dtd-object file))
-        (package (mk-package-object packagename)))
-    `(progn ; ,(package-declaration package)
-       ,@(loop for element in (dtd-elements dtd)
-            collect `(progn ,@(entity-definition-forms element package))))))
+(define-layered-method entity-definition-forms
+  :in-layer export-function-symbol
+  :around (entity package)
+  (let ((symbol (function-symbol entity package)))
+    `((export (quote ,symbol) (symbol-package (quote ,symbol)))
+      ,@(call-next-method))))
+
+(deflayer swank-sexml-documented-attributes ())
+
+(define-layered-method entity-definition-forms
+  :in-layer swank-sexml-documented-attributes
+  :around (entity package)
+  (let* ((symbol (function-symbol entity package))
+         (attribute-symbols (mapcar (rcurry #'argument-symbol (car package))
+                                    (attributes entity)))
+         (attribute-keywords (mapcar (rcurry #'argument-symbol :keyword)
+                                     (attributes entity))))
+    `((defmethod swank:arglist-dispatch :around ((symbol (eql ',symbol)) arglist)
+        (let ((arglist (call-next-method)))
+          (setf (swank::arglist.keyword-args arglist)
+                (loop for attr-sym in '(,@attribute-symbols)
+                   for attr-key in '(,@attribute-keywords)
+                   collect (swank::make-keyword-arg attr-key attr-sym nil)))
+          (setf (swank::arglist.rest arglist)
+                'rest)
+          (setf (swank::arglist.key-p arglist) t)
+          arglist))
+      ,@(call-next-method))))
+
+(deflayer standard-sexml (export-function-symbol
+                          #+swank swank-sexml-documented-attributes
+                          sexml-functions))

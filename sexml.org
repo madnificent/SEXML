@@ -31,7 +31,7 @@ sexml may generate new packages for the DTD's which it imports, however it will 
 #+begin_src lisp :tangle packages.lisp
   (defpackage :sexml
     (:use :cl-ppcre :alexandria :contextl-common-lisp)
-    (:export #:support-dtd #:with-compiletime-layers))
+    (:export :support-dtd :with-compiletime-active-layers :standard-sexml))
 #+end_src
 
 * sexml code structure
@@ -47,8 +47,6 @@ the following code-snippet describes how everything is in fact connected togethe
 #+begin_src lisp :tangle sexml.lisp
   (in-package :sexml)
   
-  <<customization-support>>
-
   <<managing-symbols>>
   
   <<lisp-naming>>
@@ -56,19 +54,23 @@ the following code-snippet describes how everything is in fact connected togethe
   <<dtd-information>>
   
   <<hooking-everything-together>>
+
+  <<customization-support>>
+
 #+end_src
 
 * customization support
 :PROPERTIES:
 :noweb-ref: customization-support
 :END:
-in order to provide extensions and changes to the base system, we use ContextL.  we want ContextL to specify contexts (in other words: options) which are enabled at compiletime.  this is not supported by standard, so we need to create a macro for this.
+in order to provide extensions and changes to the base system, we use ContextL.  we enable contextl at compiletime, so that the wanted code for each of teh tags can be generated.  this expansions allow us to provide and combine the functionality the user wants at compiletime.  
 
-macroexpansions always occur in the current environment.  however, to ensure that the functions which each nested macro-expansion call can make use of the activated layer, we need to ensure that the environment holds, for the whole time of the expansion/compilation.  we can force this by use of eval.
+** enabling layers at compiletime
+because the layers are expanded at compiletime, we need to ensure ContextL has access to them at compiletime.  macroexpansions always occur in the current environment.  however, to ensure that the functions which each nested macro-expansion call can make use of the activated layer, we need to ensure that the environment holds, for the whole time of the expansion/compilation.  we can force this by use of eval.
 
 #+begin_src lisp
   
-  (defmacro with-compiletime-layers ((&rest layers) &body body)
+  (defmacro with-compiletime-active-layers ((&rest layers) &body body)
     (let ((layers-to-activate (loop for layer in layers
                                  unless (contextl:layer-active-p layer)
                                  collect layer)))
@@ -80,59 +82,19 @@ macroexpansions always occur in the current environment.  however, to ensure tha
   
 #+end_src
 
-* hooking it all together
-:PROPERTIES:
-:noweb-ref: hooking-everything-together
-:END:
-this chapter describes how everything is connected together. leveraging from each of the used libraries.
+** base sexml system
+the base sexml system creates one function for each of the elements in the XML output. keywords are used to supply the values of their attributes.  once a non key-value pair is given, all other elements are printed as if they were inside the content of the tags.
 
-the first thing the library will do is create an object to manage all of the information in the DTD.  next up is creating a reference to a new package which will store each of the functions.  for each of the elements in the DTD we'll create a new function.  for each of the functions we'll create the argument list.  from the argument list a trivial implementation is used which should work for most tags.  we register each of the functions in the given package and export them.
+*** creating function symbols
+the most important task is exposing the function's symbols.  this is done in the <sexml-functions> layer.
+
+a function is built which knows each of the possible attributes.  the function is compiled in an environment which contains a property list with as key the keyword which the function has, and as value a string representing the attribute which should be printed.  it only has an &rest argument, as it accepts anything that's given to it and discovers what are key-value pairs and what is resting content.  the resulting forms are pushed to the list of methods needed to support this element.
 
 #+begin_src lisp
-  (define-layered-function entity-definition-forms (entity package)
-    (:documentation "entity-definition-forms is called with an entity and package object (both defined in sexml).  it should return all forms needed to generate the functions.")
-    (:method (entity package)
-      (declare (ignore entity package))
-      nil))
-  
-  (deflayer export-function-symbol ())
-  (deflayer attributes-as-keywords ())
-  (deflayer swank-documented-attributes ())
-  ;(ensure-layer 'export-function-symbol)
-  ;(ensure-layer 'attributes-as-keywords)
-  
-  ;#+swank
-  ;(ensure-layer 'swank-documented-attributes)
-  
+  (deflayer sexml-functions ())
+    
   (define-layered-method entity-definition-forms
-    :in-layer swank-documented-attributes
-    :around (entity package)
-    (let* ((symbol (function-symbol entity package))
-           (attribute-symbols (mapcar (rcurry #'argument-symbol (car package))
-                                      (attributes entity)))
-           (attribute-keywords (mapcar (rcurry #'argument-symbol :keyword)
-                                       (attributes entity))))
-      `((defmethod swank:arglist-dispatch :around ((symbol (eql ',symbol)) arglist)
-          (let ((arglist (call-next-method)))
-            (setf (swank::arglist.keyword-args arglist)
-                  (loop for attr-sym in '(,@attribute-symbols)
-                     for attr-key in '(,@attribute-keywords)
-                     collect (swank::make-keyword-arg attr-key attr-sym nil)))
-            (setf (swank::arglist.rest arglist)
-                  'rest)
-            (setf (swank::arglist.key-p arglist) t)
-            arglist))
-        ,@(call-next-method))))
-  
-  (define-layered-method entity-definition-forms
-    :in-layer export-function-symbol
-    :around (entity package)
-    (let ((symbol (function-symbol entity package)))
-      `((export (quote ,symbol) (symbol-package (quote ,symbol)))
-        ,@(call-next-method))))
-  
-  (define-layered-method entity-definition-forms
-    :in-layer attributes-as-keywords
+    :in-layer sexml-functions
     :around (entity package)
     (let ((sexp-entity (function-symbol entity package))
           (sexp-attributes (mapcar (rcurry #'argument-symbol :keyword)
@@ -157,12 +119,84 @@ the first thing the library will do is create an object to manage all of the inf
                             (list 'keys)
                             (list 'keys 'args))))))
         ,@(call-next-method))))
+    
+#+end_src
+
+*** exporting function symbols
+it is handy if the functions which can be used for creating xml are exported.  this layer handles said exporting.  only the symbol of the function needs to be exported.
+
+#+begin_src lisp
+
+  (deflayer export-function-symbol ())
+
+  (define-layered-method entity-definition-forms
+    :in-layer export-function-symbol
+    :around (entity package)
+    (let ((symbol (function-symbol entity package)))
+      `((export (quote ,symbol) (symbol-package (quote ,symbol)))
+        ,@(call-next-method))))
+
+#+end_src
+
+*** better swank reporting
+the function which we currently use only knows the &rest argument.  the spec forces functions which both have an &rest and &key to have an even number of arguments in the &rest argument.  this is not feasible in our solution, as we can supply any number of arguments.  wen swank is loaded, we will still want to get the code-hinting we're used to.  this layer adds code hints, by overriding swank:arglist-dispatch for the functions which we support.
+
+#+begin_src lisp
+
+  (deflayer swank-sexml-documented-attributes ())
+
+  (define-layered-method entity-definition-forms
+    :in-layer swank-sexml-documented-attributes
+    :around (entity package)
+    (let* ((symbol (function-symbol entity package))
+           (attribute-symbols (mapcar (rcurry #'argument-symbol (car package))
+                                      (attributes entity)))
+           (attribute-keywords (mapcar (rcurry #'argument-symbol :keyword)
+                                       (attributes entity))))
+      `((defmethod swank:arglist-dispatch :around ((symbol (eql ',symbol)) arglist)
+          (let ((arglist (call-next-method)))
+            (setf (swank::arglist.keyword-args arglist)
+                  (loop for attr-sym in '(,@attribute-symbols)
+                     for attr-key in '(,@attribute-keywords)
+                     collect (swank::make-keyword-arg attr-key attr-sym nil)))
+            (setf (swank::arglist.rest arglist)
+                  'rest)
+            (setf (swank::arglist.key-p arglist) t)
+            arglist))
+        ,@(call-next-method))))
+  
+#+end_src
+
+*** simpler use
+we simplify the use of sexml's standard xml notation by supplying a layer which extends contains the three previous layers.  this makes it easier to publish support for a DTD.
+
+#+begin_src lisp
+
+  (deflayer standard-sexml (export-function-symbol
+  ,                          #+swank swank-sexml-documented-attributes
+                            sexml-functions))
+
+#+end_src
+
+* hooking it all together
+:PROPERTIES:
+:noweb-ref: hooking-everything-together
+:END:
+this chapter describes how everything is connected together. leveraging from each of the used libraries.
+
+the first thing the library will do is create an object to manage all of the information in the DTD.  next up is creating a reference to a new package which will store each of the functions.  for each of the elements in the DTD we'll create a new function.  for each of the functions we'll create the argument list.  from the argument list a trivial implementation is used which should work for most tags.  we register each of the functions in the given package and export them.
+
+#+begin_src lisp
+  (define-layered-function entity-definition-forms (entity package)
+    (:documentation "entity-definition-forms is called with an entity and package object (both defined in sexml).  it should return all forms needed to generate the functions.")
+    (:method (entity package)
+      (declare (ignore entity package))
+      nil))
   
   (defmacro support-dtd (file packagename)
     (let ((dtd (mk-dtd-object file))
           (package (mk-package-object packagename)))
-      `(progn ; ,(package-declaration package)
-         ,@(loop for element in (dtd-elements dtd)
+      `(progn ,@(loop for element in (dtd-elements dtd)
               collect `(progn ,@(entity-definition-forms element package))))))
 #+end_src
 
