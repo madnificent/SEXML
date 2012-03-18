@@ -110,6 +110,9 @@
     (declare (ignore entity package))
     nil))
 
+(define-layered-function entity-printer-forms (entity attr-var body)
+  (:documentation "produces the forms which will handle the printing of the tags.  <entity> contains the entity which needs to be printed.  <attr-var> contains a symbol which will contain a plist of attribute-value pairs, the keyword must constist of a string at runtime, the value is not specified.  <body> contains a symbol which will contain a list of content which must be printed within the tag."))
+
 (define-layered-function tag-attribute-content (content)
   (:documentation "prints <content> in a way that it's a valid value for an attribute")
   (:method (content)
@@ -118,16 +121,13 @@
        (cl-ppcre:regex-replace "\"" content "&quot;"))
       (list
        (tag-attribute-content (format nil "~{~A~^ ~}" content)))
-      (T (tag-body-content (format nil "~A" content))))))
+      (T (tag-attribute-content (format nil "~A" content))))))
 
 (define-layered-function tag-body-content (content)
   (:documentation "prints <content> in a way appropriate for xml output.  output functions should use this in order to create correct output.")
   (:method (content)
     (typecase content
-      (string
-       (cl-ppcre:regex-replace
-        ">" (cl-ppcre:regex-replace "<" content "&lt;")
-        "&gt;"))
+      (string content)
       (list
        (tag-body-content (format nil "~{~A~^ ~}" content)))
       (T (tag-body-content (format nil "~A" content))))))
@@ -150,6 +150,29 @@
     nil))
 
 (deflayer sexml-functions ())
+(deflayer sexml-xml-producer ())
+
+(defun format-tag-attr-content (stream arg colonp atp &rest options)
+  (declare (ignore colonp atp options))
+  (format stream "~A" (tag-attribute-content arg)))
+
+(defun format-tag-body-content (stream arg colonp atp &rest options)
+  (declare (ignore colonp atp options))
+  (format stream "~A" (tag-body-content arg)))
+
+(define-layered-method entity-printer-forms
+  :in-layer sexml-xml-producer
+  (entity attr-var body)
+  `(format nil ,(concatenate 'string
+                             "<" (name entity) "~{ ~A=\"~/sexml::format-tag-attr-content/\"~}" (if (subelements-p entity) ">" "/>") ;; tag
+                             (when (subelements-p entity)
+                               "~{~/sexml::format-tag-body-content/~}") ;; content
+                             (when (subelements-p entity)
+                               (concatenate 'string "</" (name entity) ">")))
+           ,@(if (null (subelements-p entity))
+                 (list attr-var)
+                 (list attr-var body))))
+
   
 (define-layered-method entity-definition-forms
   :in-layer sexml-functions
@@ -163,21 +186,13 @@
         (defun ,sexp-entity (&rest args)
           (let* ((keys ,(if (null (subelements-p entity))
                             `(loop for (a b) on args by #'cddr
-                                append (list (getf key-translations a)
-                                             (tag-attribute-content b)))
+                                append (list (getf key-translations a) b))
                             `(progn (loop while (keywordp (first args))
-                                   append (list (getf key-translations (pop args))
-                                                (tag-attribute-content (pop args))))))))
-            (format nil ,(concatenate 'string
-                                      "<" (name entity) "~{ ~A=~S~}" (if (subelements-p entity) ">" "/>") ;; tag
-                                      (when (subelements-p entity)
-                                        "~{~A~^ ~}") ;; content
-                                      (when (subelements-p entity)
-                                        (concatenate 'string "</" (name entity) ">")))
-                    ,@(if (null (subelements-p entity))
-                          (list 'keys)
-                          (list 'keys '(mapcar #'tag-body-content args)))))))
+                                   append (list (getf key-translations (pop args)) ;; we pop args, so args contains the body in the end
+                                                (pop args)))))))
+            ,(entity-printer-forms entity 'keys 'args))))
       ,@(call-next-method))))
+
   
 (deflayer export-function-symbol ())
 
@@ -212,4 +227,5 @@
 
 (deflayer standard-sexml (export-function-symbol
                           #+swank swank-sexml-documented-attributes
-                          sexml-functions))
+                          sexml-functions
+                          sexml-xml-producer))
