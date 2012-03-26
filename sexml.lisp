@@ -110,6 +110,11 @@
     (declare (ignore entity package))
     nil))
 
+(define-layered-function dtd-support-forms (dtd package)
+  (:documentation "returns a list of forms which need to be compiled to support the dtd")
+  (:method (dtd package)
+    nil))
+
 (define-layered-function entity-printer-forms (entity attr-var body)
   (:documentation "produces the forms which will handle the printing of the tags.  <entity> contains the entity which needs to be printed.  <attr-var> contains a symbol which will contain a plist of attribute-value pairs, the keyword must constist of a string at runtime, the value is not specified.  <body> contains a symbol which will contain a list of content which must be printed within the tag."))
 
@@ -138,8 +143,9 @@
 (defmacro support-dtd (file packagename)
   (let ((dtd (mk-dtd-object (eval file)))
         (package (mk-package-object packagename)))
-    `(progn ,@(loop for element in (dtd-elements dtd)
-            collect `(progn ,@(entity-definition-forms element package))))))
+    `(progn ,@(dtd-support-forms dtd package)
+        ,@(loop for element in (dtd-elements dtd)
+             collect `(progn ,@(entity-definition-forms element package))))))
 
 
 (defmacro with-compiletime-active-layers ((&rest layers) &body body)
@@ -228,7 +234,19 @@
           arglist))
       ,@(call-next-method))))
 
+(deflayer xml-comments ())
+
+(define-layered-method dtd-support-forms
+  :in-layer xml-comments
+  :around (dtd package)
+  (let ((function-name (mk-lisp-symbol (symbol-name '!--) package)))
+    `(,@(call-next-method)
+        (defun ,function-name (&rest comments)
+          (format nil "<!-- ~{~A~} -->" (recursively-flatten comments)))
+        (export (quote ,function-name) (symbol-package (quote ,function-name))))))
+
 (deflayer standard-sexml (export-function-symbol
                           #+swank swank-sexml-documented-attributes
                           sexml-functions
-                          sexml-xml-producer))
+                          sexml-xml-producer
+                          xml-comments))

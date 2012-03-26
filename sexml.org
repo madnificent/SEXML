@@ -184,6 +184,24 @@ the function which we currently use only knows the &rest argument.  the spec for
   
 #+end_src
 
+*** xml comments
+xml comments reside in a special tag.  we can create a function named #'!-- for this purpose.  this can't be included in the DTD, as xml supports it by default, however other similar formats may want to steal the tag for other purposes.
+
+#+begin_src lisp
+  
+  (deflayer xml-comments ())
+  
+  (define-layered-method dtd-support-forms
+    :in-layer xml-comments
+    :around (dtd package)
+    (let ((function-name (mk-lisp-symbol (symbol-name '!--) package)))
+      `(,@(call-next-method)
+          (defun ,function-name (&rest comments)
+            (format nil "<!-- ~{~A~} -->" (recursively-flatten comments)))
+          (export (quote ,function-name) (symbol-package (quote ,function-name))))))
+  
+#+end_src
+
 *** simpler use
 we simplify the use of sexml's standard xml notation by supplying a layer which extends contains the three previous layers.  this makes it easier to publish support for a DTD.
 
@@ -192,7 +210,8 @@ we simplify the use of sexml's standard xml notation by supplying a layer which 
   (deflayer standard-sexml (export-function-symbol
   ,                          #+swank swank-sexml-documented-attributes
                             sexml-functions
-                            sexml-xml-producer))
+                            sexml-xml-producer
+                            xml-comments))
   
 #+end_src
 
@@ -209,6 +228,11 @@ the first thing the library will do is create an object to manage all of the inf
     (:documentation "entity-definition-forms is called with an entity and package object (both defined in sexml).  it should return all forms needed to generate the functions.")
     (:method (entity package)
       (declare (ignore entity package))
+      nil))
+  
+  (define-layered-function dtd-support-forms (dtd package)
+    (:documentation "returns a list of forms which need to be compiled to support the dtd")
+    (:method (dtd package)
       nil))
   
   (define-layered-function entity-printer-forms (entity attr-var body)
@@ -239,8 +263,9 @@ the first thing the library will do is create an object to manage all of the inf
   (defmacro support-dtd (file packagename)
     (let ((dtd (mk-dtd-object (eval file)))
           (package (mk-package-object packagename)))
-      `(progn ,@(loop for element in (dtd-elements dtd)
-              collect `(progn ,@(entity-definition-forms element package))))))
+      `(progn ,@(dtd-support-forms dtd package)
+          ,@(loop for element in (dtd-elements dtd)
+               collect `(progn ,@(entity-definition-forms element package))))))
 #+end_src
 
 * managing symbols
