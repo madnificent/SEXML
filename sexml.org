@@ -29,9 +29,12 @@ trivial package for an open source library.  uses cl-ppcre.
 sexml may generate new packages for the DTD's which it imports, however it will only use a single predefined package.
 
 #+begin_src lisp :tangle packages.lisp
+  
   (defpackage :sexml
     (:use :cl-ppcre :alexandria :contextl-common-lisp)
-    (:export :support-dtd :with-compiletime-active-layers :standard-sexml))
+    (:export :support-dtd :with-compiletime-active-layers :standard-sexml
+             :ie-conditionals))
+  
 #+end_src
 
 * sexml code structure
@@ -201,6 +204,26 @@ xml comments reside in a special tag.  we can create a function named #'!-- for 
           (export (quote ,function-name) (symbol-package (quote ,function-name))))))
   
 #+end_src
+
+*** internet explorer conditionals
+IE has optional conditional statements.  this shouldn't be needed in more cases, but can optionally be supported by the ie-conditionals layer.
+
+#+begin_src lisp
+  
+  (deflayer ie-conditionals ())
+  
+  (define-layered-method dtd-support-forms
+    :in-layer ie-conditionals
+    :around (dtd package)
+    (let ((function-name (mk-lisp-symbol (symbol-name '!if) package)))
+      `(,@(call-next-method)
+        (defun ,function-name (condition &rest args)
+            (format nil "<!--[if ~A]>~{~A~}<![endif]-->" condition (recursively-flatten args)))
+        (export (quote ,function-name)
+                (symbol-package (quote ,function-name))))))
+  
+#+end_src
+
 
 *** simpler use
 we simplify the use of sexml's standard xml notation by supplying a layer which extends contains the three previous layers.  this makes it easier to publish support for a DTD.
