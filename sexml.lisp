@@ -133,7 +133,7 @@
       (T (tag-body-content (format nil "~A" content))))))
 
 (defmacro support-dtd (file packagename)
-  (let ((dtd (mk-dtd-object file))
+  (let ((dtd (mk-dtd-object (eval file)))
         (package (mk-package-object packagename)))
     `(progn ,@(loop for element in (dtd-elements dtd)
             collect `(progn ,@(entity-definition-forms element package))))))

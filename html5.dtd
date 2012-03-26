@@ -1,0 +1,333 @@
+<!ENTITY % na "CDATA #IMPLIED">
+<!ENTITY % ne "ANY">
+<!ENTITY % void "EMPTY">
+
+<!ENTITY % global-attributes "accesskey %na; class %na; contenteditable %na; contextmenu %na; dir %na; draggable %na; dropzone %na; hidden %na; id %na; itemid %na; itemprop %na; itemref %na; itemscope %na; itemtype %na; lang %na; spellcheck %na; style %na; tabindex %na; title %na;">
+
+<!ELEMENT html %ne;>
+<!ATTLIST html %global-attributes; manifest %na;>
+
+<!ELEMENT head %ne;>
+<!ATTLIST head %global-attributes;>
+
+<!ELEMENT title %ne;>
+<!ATTLIST title %global-attributes;>
+
+<!ELEMENT base %void;>
+<!ATTLIST base href %na; target %na;>
+
+<!ELEMENT link %void;>
+<!ATTLIST link %global-attributes; href %na; rel %na; media %na; hreflang %na; type %na; sizes %na;>
+
+<!ELEMENT meta %void;>
+<!ATTLIST meta %global-attributes; name %na; http-equiv %na; content %na; charset %na;>
+
+<!ELEMENT style %ne;>
+<!ATTLIST style %global-attributes; media %na; type %na; scoped %na;>
+
+<!ELEMENT script %ne;>
+<!ATTLIST script %global-attributes; src %na; async %na; defer %na; type %na; charset %na;>
+
+<!ELEMENT noscript %ne;>
+<!ATTLIST noscript %global-attributes; >
+
+<!ELEMENT body %ne;>
+<!ATTLIST body %global-attributes; onafterprint %na; onbeforeprint %na; onbeforeunload %na; onblur %na; onerror %na; onfocus %na; onhashchange %na; onload %na; onmessage %na; onoffline %na; ononline %na; onpagehide %na; onpageshow %na; onpopstate %na; onresize %na; onscroll %na; onstorage %na; onunload %na;>
+
+<!ELEMENT section %ne;>
+<!ATTLIST section %global-attributes; >
+
+<!ELEMENT nav %ne;>
+<!ATTLIST nav %global-attributes; >
+
+<!ELEMENT article %ne;>
+<!ATTLIST article %global-attributes; >
+
+<!ELEMENT aside %ne;>
+<!ATTLIST aside %global-attributes; >
+
+<!ELEMENT h1 %ne;>
+<!ATTLIST h1 %global-attributes; >
+
+<!ELEMENT h2 %ne;>
+<!ATTLIST h2 %global-attributes; >
+
+<!ELEMENT h3 %ne;>
+<!ATTLIST h3 %global-attributes; >
+
+<!ELEMENT h4 %ne;>
+<!ATTLIST h4 %global-attributes; >
+
+<!ELEMENT h5 %ne;>
+<!ATTLIST h5 %global-attributes; >
+
+<!ELEMENT h6 %ne;>
+<!ATTLIST h6 %global-attributes; >
+
+<!ELEMENT hgroup %ne;>
+<!ATTLIST hgroup %global-attributes; >
+
+<!ELEMENT header %ne;>
+<!ATTLIST header %global-attributes; >
+
+<!ELEMENT footer %ne;>
+<!ATTLIST footer %global-attributes; >
+
+<!ELEMENT address %ne;>
+<!ATTLIST address %global-attributes; >
+
+<!ELEMENT p %ne;>
+<!ATTLIST p %global-attributes; >
+
+<!ELEMENT hr %void;>
+<!ATTLIST hr %global-attributes; >
+
+<!ELEMENT pre %ne;>
+<!ATTLIST pre %global-attributes; >
+
+<!ELEMENT blockquote %ne;>
+<!ATTLIST blockquote %global-attributes; cite %na;>
+
+<!ELEMENT ol %ne;>
+<!ATTLIST ol %global-attributes; reversed %na; start %na; type %na;>
+
+<!ELEMENT ul %ne;>
+<!ATTLIST ul %global-attributes; >
+
+<!ELEMENT li %ne;>
+<!ATTLIST li %global-attributes; value %na;>
+
+<!ELEMENT dl %ne;>
+<!ATTLIST dl %global-attributes; >
+
+<!ELEMENT dt %ne;>
+<!ATTLIST dt %global-attributes; >
+
+<!ELEMENT dd %ne;>
+<!ATTLIST dd %global-attributes; >
+
+<!ELEMENT figure %ne;>
+<!ATTLIST figure %global-attributes; >
+
+<!ELEMENT figcaption %ne;>
+<!ATTLIST figcaption %global-attributes; >
+
+<!ELEMENT div %ne;>
+<!ATTLIST div %global-attributes; >
+
+<!ELEMENT a %ne;>
+<!ATTLIST a %global-attributes; href %na; target %na; download %na; ping %na; rel %na; media %na; hreflang %na; type %na;>
+
+<!ELEMENT em %ne;>
+<!ATTLIST em %global-attributes; >
+
+<!ELEMENT strong %ne;>
+<!ATTLIST strong %global-attributes; >
+
+<!ELEMENT small %ne;>
+<!ATTLIST small %global-attributes; >
+
+<!ELEMENT s %ne;>
+<!ATTLIST s %global-attributes; >
+
+<!ELEMENT cite %ne;>
+<!ATTLIST cite %global-attributes; >
+
+<!ELEMENT q %ne;>
+<!ATTLIST q %global-attributes; cite %na;>
+
+<!ELEMENT dfn %ne;>
+<!ATTLIST dfn %global-attributes; >
+
+<!ELEMENT abbr %ne;>
+<!ATTLIST abbr %global-attributes; >
+
+<!ELEMENT data %ne;>
+<!ATTLIST data %global-attributes; value %na;>
+
+<!ELEMENT time %ne;>
+<!ATTLIST time %global-attributes; datetime %na; pubdate %na;>
+
+<!ELEMENT code %ne;>
+<!ATTLIST code %global-attributes; >
+
+<!ELEMENT var %ne;>
+<!ATTLIST var %global-attributes; >
+
+<!ELEMENT samp %ne;>
+<!ATTLIST samp %global-attributes; >
+
+<!ELEMENT kbd %ne;>
+<!ATTLIST kbd %global-attributes; >
+
+<!ELEMENT sub %ne;>
+<!ATTLIST sub %global-attributes; >
+
+<!ELEMENT sup %ne;>
+<!ATTLIST sup %global-attributes; >
+
+<!ELEMENT i %ne;>
+<!ATTLIST i %global-attributes; >
+
+<!ELEMENT b %ne;>
+<!ATTLIST b %global-attributes; >
+
+<!ELEMENT u %ne;>
+<!ATTLIST u %global-attributes; >
+
+<!ELEMENT mark %ne;>
+<!ATTLIST mark %global-attributes; >
+
+<!ELEMENT ruby %ne;>
+<!ATTLIST ruby %global-attributes; >
+
+<!ELEMENT rt %ne;>
+<!ATTLIST rt %global-attributes; >
+
+<!ELEMENT rp %ne;>
+<!ATTLIST rp %global-attributes; >
+
+<!ELEMENT bdi %ne;>
+<!ATTLIST bdi %global-attributes; >
+
+<!ELEMENT bdo %ne;>
+<!ATTLIST bdo %global-attributes; >
+
+<!ELEMENT span %ne;>
+<!ATTLIST span %global-attributes; >
+
+<!ELEMENT br %void;>
+<!ATTLIST br %global-attributes; >
+
+<!ELEMENT wbr %void;>
+<!ATTLIST wbr %global-attributes; >
+
+<!ELEMENT ins %ne;>
+<!ATTLIST ins %global-attributes; cite %na; datetime %na;>
+
+<!ELEMENT del %ne;>
+<!ATTLIST del %global-attributes; cite %na; datetime %na;>
+
+<!ELEMENT img %void;>
+<!ATTLIST img %global-attributes; alt %na; src %na; crossorigin %na; usemap %na; ismap %na; width %na; height %na;>
+
+<!ELEMENT iframe %ne;>
+<!ATTLIST iframe %global-attributes; src %na; srcdoc %na; name %na; sandbox %na; seamless %na; width %na; height %na; allowfullscreen %na;>
+
+<!ELEMENT embed %void;>
+<!ATTLIST embed %global-attributes; src %na; type %na; width %na; height %na;>
+
+<!ELEMENT object %ne;>
+<!ATTLIST object %global-attributes; data %na; type %na; typemustmatch %na; name %na; usemap %na; form %na; width %na; height %na;>
+
+<!ELEMENT param %void;>
+<!ATTLIST param %global-attributes; name %na; value %na;>
+
+<!ELEMENT video %ne;>
+<!ATTLIST video %global-attributes; src %na; crossorigin %na; poster %na; preload %na; autoplay %na; mediagroup %na; loop %na; muted %na; controls %na; width %na; height %na;>
+
+<!ELEMENT audio %ne;>
+<!ATTLIST audio %global-attributes; src %na; crossorigin %na; preload %na; autoplay %na; mediagroup %na; loop %na; muted %na; controls %na;>
+
+<!ELEMENT source %void;>
+<!ATTLIST source %global-attributes; src %na; type %na; media %na;>
+
+<!ELEMENT track %void;>
+<!ATTLIST track %global-attributes; kind %na; src %na; srclang %na; label %na; default %na;>
+
+<!ELEMENT canvas %ne;>
+<!ATTLIST canvas %global-attributes; width %na; height %na;>
+
+<!ELEMENT map %ne;>
+<!ATTLIST map %global-attributes; name %na;>
+
+<!ELEMENT area %void;>
+<!ATTLIST area %global-attributes; alt %na; coords %na; shape %na; href %na; target %na; download %na; ping %na; rel %na; media %na; hreflang %na; type %na;>
+
+<!ELEMENT table %ne;>
+<!ATTLIST table %global-attributes; border %na;>
+
+<!ELEMENT caption %ne;>
+<!ATTLIST caption %global-attributes; >
+
+<!ELEMENT colgroup %void;>
+<!ATTLIST colgroup %global-attributes; span %na;>
+
+<!ELEMENT col %ne;>
+<!ATTLIST col %global-attributes; span %na;>
+
+<!ELEMENT tbody %ne;>
+<!ATTLIST tbody %global-attributes; >
+
+<!ELEMENT thead %ne;>
+<!ATTLIST thead %global-attributes; >
+
+<!ELEMENT tfoot %ne;>
+<!ATTLIST tfoot %global-attributes; >
+
+<!ELEMENT tr %ne;>
+<!ATTLIST tr %global-attributes; >
+
+<!ELEMENT td %ne;>
+<!ATTLIST td %global-attributes; colspan %na; rowspan %na; headers %na;>
+
+<!ELEMENT th %ne;>
+<!ATTLIST th %global-attributes; colspan %na; rowspan %na; headers %na; scope %na;>
+
+<!ELEMENT form %ne;>
+<!ATTLIST form %global-attributes; accept-charset %na; action %na; autocomplete %na; enctype %na; method %na; name %na; novalidate %na; target %na;>
+
+<!ELEMENT fieldset %ne;>
+<!ATTLIST fieldset %global-attributes; disabled %na; form %na; name %na;>
+
+<!ELEMENT legend %ne;>
+<!ATTLIST legend %global-attributes; >
+
+<!ELEMENT label %ne;>
+<!ATTLIST label %global-attributes; form %na; for %na;>
+
+<!ELEMENT input %void;>
+<!ATTLIST input %global-attributes; accept %na; alt %na; autocomplete %na; autofocus %na; checked %na; dirname %na; disabled %na; form %na; formaction %na; formenctype %na; formmethod %na; formnovalidate %na; formtarget %na; height %na; list %na; max %na; maxlength %na; min %na; multiple %na; name %na; pattern %na; placeholder %na; readonly %na; required %na; size %na; src %na; step %na; type %na; value %na; width %na;>
+
+<!ELEMENT button %ne;>
+<!ATTLIST button %global-attributes; autofocus %na; disabled %na; form %na; formaction %na; formenctype %na; formmethod %na; formnovalidate %na; formtarget %na; name %na; type %na; value %na;>
+
+<!ELEMENT select %ne;>
+<!ATTLIST select %global-attributes; autofocus %na; disabled %na; form %na; multiple %na; name %na; required %na; size %na;>
+
+<!ELEMENT datalist %ne;>
+<!ATTLIST datalist %global-attributes; >
+
+<!ELEMENT optgroup %ne;>
+<!ATTLIST optgroup %global-attributes; disabled %na; label %na;>
+
+<!ELEMENT option %ne;>
+<!ATTLIST option %global-attributes; disabled %na; label %na; selected %na; value %na;>
+
+<!ELEMENT textarea %ne;>
+<!ATTLIST textarea %global-attributes; autofocus %na; cols %na; dirname %na; disabled %na; form %na; maxlength %na; name %na; placeholder %na; readonly %na; required %na; rows %na; wrap %na;>
+
+<!ELEMENT keygen %void;>
+<!ATTLIST keygen %global-attributes; autofocus %na; challenge %na; disabled %na; form %na; keytype %na; name %na;>
+
+<!ELEMENT output %ne;>
+<!ATTLIST output %global-attributes; for %na; form %na; name %na;>
+
+<!ELEMENT progress %ne;>
+<!ATTLIST progress %global-attributes; value %na; max %na;>
+
+<!ELEMENT meter %ne;>
+<!ATTLIST meter %global-attributes; value %na; min %na; max %na; low %na; high %na; optimum %na;>
+
+<!ELEMENT details %ne;>
+<!ATTLIST details %global-attributes; open %na;>
+
+<!ELEMENT summary %ne;>
+<!ATTLIST summary %global-attributes; >
+
+<!ELEMENT command %void;>
+<!ATTLIST command %global-attributes; type %na; label %na; icon %na; disabled %na; checked %na; radiogroup %na;>
+
+<!ELEMENT menu %ne;>
+<!ATTLIST menu %global-attributes; type %na; label %na;>
+
