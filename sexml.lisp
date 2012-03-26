@@ -123,14 +123,17 @@
        (tag-attribute-content (format nil "~{~A~^ ~}" content)))
       (T (tag-attribute-content (format nil "~A" content))))))
 
+(defun recursively-flatten (&rest args)
+  "recursively flattens a list"
+  (loop for arg in args
+     append (if (listp arg)
+                (apply #'recursively-flatten arg)
+                (list arg))))
+
 (define-layered-function tag-body-content (content)
   (:documentation "prints <content> in a way appropriate for xml output.  output functions should use this in order to create correct output.")
   (:method (content)
-    (typecase content
-      (string content)
-      (list
-       (tag-body-content (format nil "~{~A~^ ~}" content)))
-      (T (tag-body-content (format nil "~A" content))))))
+    (format nil "~{~A~}" (recursively-flatten content))))
 
 (defmacro support-dtd (file packagename)
   (let ((dtd (mk-dtd-object (eval file)))
