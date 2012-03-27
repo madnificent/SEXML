@@ -33,7 +33,7 @@ sexml may generate new packages for the DTD's which it imports, however it will 
   (defpackage :sexml
     (:use :cl-ppcre :alexandria :contextl-common-lisp)
     (:export :support-dtd :with-compiletime-active-layers :standard-sexml
-             :ie-conditionals))
+             :ie-conditionals :xml-doctype))
   
 #+end_src
 
@@ -224,6 +224,52 @@ IE has optional conditional statements.  this shouldn't be needed in more cases,
   
 #+end_src
 
+*** xml doctypes
+doctypes specify where the dtd can be found, they are located at the top of the xml document.  after the dtd has been supported, the augment-with-doctype macro.  this macro allows the user to set the doctype and (optionally) make the toplevel tag automatically emit the doctype.
+
+the full doctype is stored in /*doctype*/.  the doctype itself can be emitted by calling #'doctype which accepts any amount of forms to be rendered after the emitted doctype.
+
+#+begin_src lisp
+  
+  (deflayer xml-doctype ())
+  
+  (define-layered-method dtd-support-forms
+    :in-layer xml-doctype
+    :around (dtd package)
+    (let ((doctype-var (mk-lisp-symbol (symbol-name '*doctype*) package))
+          (doctype-func (mk-lisp-symbol (symbol-name 'doctype) package))
+          (doctype-add-dtd (mk-lisp-symbol (symbol-name 'augment-with-doctype) package))
+          (doctype-add-func (mk-lisp-symbol (symbol-name 'augment-tag-with-doctype) package)))
+      `(,@(call-next-method)
+          (defparameter ,doctype-var "" "Set this to the doctype for this xml package")
+          (defun ,doctype-func (&rest content)
+            (format nil "~A~&~{~A~}" ,doctype-var (recursively-flatten content)))
+          (defmacro ,doctype-add-func (function-symbol)
+            (list 'setf (list 'fdefinition (list 'quote function-symbol))
+                  (list 'let (list (list 'function (list 'function function-symbol)))
+                        '(lambda (&rest args)
+                          (concatenate 'string 
+                           (funcall ',doctype-func)
+                           (apply function args))))))
+          (defmacro ,doctype-add-dtd (tag dtd &key auto-emit-p)
+            (list 'progn
+                  (list 'setf ',doctype-var (list
+                                             'format 'nil
+                                             "<!DOCTYPE ~A ~A>"
+                                             tag dtd))
+                  (when auto-emit-p
+                    (list ',doctype-add-func
+                          (mk-lisp-symbol tag (symbol-package (quote ,doctype-add-dtd)))))))
+          (export (quote ,doctype-var)
+                  (symbol-package (quote ,doctype-var)))
+          (export (quote ,doctype-func)
+                  (symbol-package (quote ,doctype-func)))
+          (export (quote ,doctype-add-func)
+                  (symbol-package (quote ,doctype-add-func)))
+          (export (quote ,doctype-add-dtd)
+                  (symbol-package (quote ,doctype-add-dtd))))))
+  
+#+end_src
 
 *** simpler use
 we simplify the use of sexml's standard xml notation by supplying a layer which extends contains the three previous layers.  this makes it easier to publish support for a DTD.
