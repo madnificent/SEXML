@@ -257,6 +257,44 @@
       (export (quote ,function-name)
               (symbol-package (quote ,function-name))))))
 
+(deflayer xml-doctype ())
+
+(define-layered-method dtd-support-forms
+  :in-layer xml-doctype
+  :around (dtd package)
+  (let ((doctype-var (mk-lisp-symbol (symbol-name '*doctype*) package))
+        (doctype-func (mk-lisp-symbol (symbol-name 'doctype) package))
+        (doctype-add-dtd (mk-lisp-symbol (symbol-name 'augment-with-doctype) package))
+        (doctype-add-func (mk-lisp-symbol (symbol-name 'augment-tag-with-doctype) package)))
+    `(,@(call-next-method)
+        (defparameter ,doctype-var "" "Set this to the doctype for this xml package")
+        (defun ,doctype-func (&rest content)
+          (format nil "~A~&~{~A~}" ,doctype-var (recursively-flatten content)))
+        (defmacro ,doctype-add-func (function-symbol)
+          (list 'setf (list 'fdefinition (list 'quote function-symbol))
+                (list 'let (list (list 'function (list 'function function-symbol)))
+                      '(lambda (&rest args)
+                        (concatenate 'string 
+                         (funcall ',doctype-func)
+                         (apply function args))))))
+        (defmacro ,doctype-add-dtd (tag dtd &key auto-emit-p)
+          (list 'progn
+                (list 'setf ',doctype-var (list
+                                           'format 'nil
+                                           "<!DOCTYPE ~A ~A>"
+                                           tag dtd))
+                (when auto-emit-p
+                  (list ',doctype-add-func
+                        (mk-lisp-symbol tag (symbol-package (quote ,doctype-add-dtd)))))))
+        (export (quote ,doctype-var)
+                (symbol-package (quote ,doctype-var)))
+        (export (quote ,doctype-func)
+                (symbol-package (quote ,doctype-func)))
+        (export (quote ,doctype-add-func)
+                (symbol-package (quote ,doctype-add-func)))
+        (export (quote ,doctype-add-dtd)
+                (symbol-package (quote ,doctype-add-dtd))))))
+
 (deflayer standard-sexml (export-function-symbol
                           #+swank swank-sexml-documented-attributes
                           sexml-functions
