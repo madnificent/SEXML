@@ -2,7 +2,11 @@
 <!ENTITY % ne "ANY">
 <!ENTITY % void "EMPTY">
 
-<!ENTITY % global-attributes "accesskey %na; class %na; contenteditable %na; contextmenu %na; dir %na; draggable %na; dropzone %na; hidden %na; id %na; itemid %na; itemprop %na; itemref %na; itemscope %na; itemtype %na; lang %na; spellcheck %na; style %na; tabindex %na; title %na;">
+<!ENTITY % base-attributes "accesskey %na; class %na; contenteditable %na; contextmenu %na; dir %na; draggable %na; dropzone %na; hidden %na; id %na; itemid %na; itemprop %na; itemref %na; itemscope %na; itemtype %na; lang %na; spellcheck %na; style %na; tabindex %na; title %na; onabort %na; oncanplay %na; oncanplaythrough %na; onchange %na; onclick %na; oncontextmenu %na; oncuechange %na; ondblclick %na; ondrag %na; ondragend %na; ondragenter %na; ondragleave %na; ondragover %na; ondragstart %na; ondrop %na; ondurationchange %na; onemptied %na; onended %na; oninput %na; oninvalid %na; onkeydown %na; onkeypress %na; onkeyup %na; onloadeddata %na; onloadedmetadata %na; onloadstart %na; onmousedown %na; onmousemove %na; onmouseout %na; onmouseover %na; onmouseup %na; onmousewheel %na; onpause %na; onplay %na; onplaying %na; onprogress %na; onratechange %na; onreset %na; onseeked %na; onseeking %na; onselect %na; onshow %na; onstalled %na; onsubmit %na; onsuspend %na; ontimeupdate %na; onvolumechange %na; onwaiting %na; ">
+
+<!ENTITY % body-and-frame-extras "onafterprint %na; onbeforeprint %na; onbeforeunload %na; onblur %na; onerror %na; onfocus %na; onhashchange %na; onload %na; onmessage %na; onoffline %na; ononline %na; onpagehide %na; onpageshow %na; onpopstate %na; onresize %na; onscroll %na; onstorage %na; onunload %na; ">
+
+<!ENTITY % global-attributes "%base-attributes; onblur %na; onerror %na; onfocus %na; onload %na; onscroll %na;">
 
 <!ELEMENT html %ne;>
 <!ATTLIST html %global-attributes; manifest %na;>
@@ -32,7 +36,7 @@
 <!ATTLIST noscript %global-attributes; >
 
 <!ELEMENT body %ne;>
-<!ATTLIST body %global-attributes; onafterprint %na; onbeforeprint %na; onbeforeunload %na; onblur %na; onerror %na; onfocus %na; onhashchange %na; onload %na; onmessage %na; onoffline %na; ononline %na; onpagehide %na; onpageshow %na; onpopstate %na; onresize %na; onscroll %na; onstorage %na; onunload %na;>
+<!ATTLIST body %base-attributes; %body-and-frame-extras; >
 
 <!ELEMENT section %ne;>
 <!ATTLIST section %global-attributes; >
