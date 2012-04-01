@@ -143,20 +143,20 @@
 (defmacro support-dtd (file packagename)
   (let ((dtd (mk-dtd-object (eval file)))
         (package (mk-package-object packagename)))
-    `(progn ,@(dtd-support-forms dtd package)
-        ,@(loop for element in (dtd-elements dtd)
-             collect `(progn ,@(entity-definition-forms element package))))))
+    `(progn ,(package-declaration package)
+            ,@(dtd-support-forms dtd package)
+            ,@(loop for element in (dtd-elements dtd)
+                 collect `(progn ,@(entity-definition-forms element package))))))
 
 
 (defmacro with-compiletime-active-layers ((&rest layers) &body body)
   (let ((layers-to-activate (loop for layer in layers
                                unless (contextl:layer-active-p layer)
                                collect layer)))
-    (mapcar #'contextl:ensure-active-layer layers-to-activate)
-    (dolist (bd body)
-      (eval bd))
-    (mapcar #'contextl:ensure-inactive-layer layers-to-activate)
-    nil))
+    (prog2
+        (mapcar #'contextl:ensure-active-layer layers-to-activate)
+        (macroexpand-dammit `(progn ,@body))
+      (mapcar #'contextl:ensure-inactive-layer layers-to-activate))))
 
 (deflayer sexml-functions ())
 (deflayer sexml-xml-producer ())
