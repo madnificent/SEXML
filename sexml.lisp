@@ -4,7 +4,7 @@
 (defun mk-package-object (name)
   "creates a new package object"
   (list (or (find-package name)
-           (make-package name))))
+            (make-package name))))
 
 (defun package-exports-symbol (package symbol)
   "makes sure package knows it needs to export symbol, and exports it"
@@ -143,7 +143,7 @@
 (defmacro support-dtd (file packagename)
   (let ((dtd (mk-dtd-object (eval file)))
         (package (mk-package-object packagename)))
-    `(progn ,(package-declaration package)
+    `(progn ; ,(package-declaration package)
             ,@(dtd-support-forms dtd package)
             ,@(loop for element in (dtd-elements dtd)
                  collect `(progn ,@(entity-definition-forms element package))))))
@@ -209,7 +209,7 @@
   :in-layer export-function-symbol
   :around (entity package)
   (let ((symbol (function-symbol entity package)))
-    `((export (quote ,symbol) (symbol-package (quote ,symbol)))
+    `((export (quote ,symbol) ',(symbol-package symbol))
       ,@(call-next-method))))
 
 (deflayer swank-sexml-documented-attributes ())
@@ -222,7 +222,8 @@
                                     (attributes entity)))
          (attribute-keywords (mapcar (rcurry #'argument-symbol :keyword)
                                      (attributes entity))))
-    `((defmethod swank:arglist-dispatch :around ((symbol (eql ',symbol)) arglist)
+    `(#+swank
+      (defmethod swank:arglist-dispatch :around ((symbol (eql ',symbol)) arglist)
         (let ((arglist (call-next-method)))
           (setf (swank::arglist.keyword-args arglist)
                 (loop for attr-sym in '(,@attribute-symbols)
@@ -243,7 +244,7 @@
     `(,@(call-next-method)
         (defun ,function-name (&rest comments)
           (format nil "<!-- ~{~A~} -->" (recursively-flatten comments)))
-        (export (quote ,function-name) (symbol-package (quote ,function-name))))))
+        (export (quote ,function-name) ',(symbol-package function-name)))))
 
 (deflayer ie-conditionals ())
 
@@ -255,7 +256,7 @@
       (defun ,function-name (condition &rest args)
           (format nil "<!--[if ~A]>~{~A~}<![endif]-->" condition (recursively-flatten args)))
       (export (quote ,function-name)
-              (symbol-package (quote ,function-name))))))
+              ',(symbol-package function-name)))))
 
 (deflayer xml-doctype ())
 
@@ -285,15 +286,15 @@
                                            tag dtd))
                 (when auto-emit-p
                   (list ',doctype-add-func
-                        (mk-lisp-symbol tag (symbol-package (quote ,doctype-add-dtd)))))))
+                        (mk-lisp-symbol tag ',(symbol-package doctype-add-dtd))))))
         (export (quote ,doctype-var)
-                (symbol-package (quote ,doctype-var)))
+                ',(symbol-package doctype-var))
         (export (quote ,doctype-func)
-                (symbol-package (quote ,doctype-func)))
+                ',(symbol-package doctype-func))
         (export (quote ,doctype-add-func)
-                (symbol-package (quote ,doctype-add-func)))
+                ',(symbol-package doctype-add-func))
         (export (quote ,doctype-add-dtd)
-                (symbol-package (quote ,doctype-add-dtd))))))
+                ',(symbol-package doctype-add-dtd)))))
 
 (deflayer standard-sexml (export-function-symbol
                           #+swank swank-sexml-documented-attributes
