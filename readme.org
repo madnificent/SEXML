@@ -1,0 +1,82 @@
+SEXML
+
+an extensible Common Lisp library for converting S-Expressions to XML which suits a DTD.
+
+* what?
+SEXML is a very extensible library for writing XML from s-expressions.  it allows users to configure a system which generates the code for writing the XML of a specific DTD.  the SEXML core is written literate programming style, using emacs's orgmode.  SEXML uses context-oriented programming at compiletime by virtue of ContextL to pick which code is to be generated.
+
+* why?
+many lispers, including me, write their own library for writing xml.
+
+all of us want some minor detail to be different.  some want to write s-expressions as macros, others want to use objects and yet other people want to have a functional interface.  many want support for xhtml, others want html5 support, even others want to write an svg.   in some cases support is wanted which really doesn't belong in an XML library.  should support for internet explorer conditionals be added, for instance.  it doesn't belong in a standardized library, but it can be a necessity in some practical cases.  SEXML tries to help these different views by splitting the code up in smaller pieces which can be enabled at compiletime, these are ContextL layers.
+
+this way we only need to change those pieces which we want different, instead of writing yet another XML output library.
+
+* how do i use it?
+SEXML provides a basic package which helps users write XML.  by standard SEXML contains some customary layers for writing html code, but it can be used for writing SVG just as easily.
+
+for every option, we enable the ContextL layers which will ensure the correct code is generated.  we then generate the code for the DTD specifiaction, in the package we want.  the package will be created for us, it will export the needed symbols and those symbols will get the necessary functions or macros connected to them.
+
+the following contains three examples for using SEXML.
+
+
+** svg
+assuming you have the svg spec (located at http://www.w3.org/Graphics/SVG/1.1/DTD/svg11-flat-20110816.dtd) available in /path/to/svg11.dtd, you can add support for the dtd like so:
+
+#+begin_src lisp
+  (sexml:with-compiletime-active-layers (sexml:standard-sexml)
+    (sexml:support-dtd "/path/to/svg11.dtd" :svg))
+#+end_src
+
+this will create a new package and, if swank was loaded when you loaded sexml, it will add hints as to which options are available for a specific tag.
+
+in the repl, enter (svg:svg []) with your pointer at position [] and you'll see all possible keywords which you can use when writing the svg element.  see the full list by entering C-c C-d A.  notice that the keywords are automatically translated from the naming in the DTD into a more lispy form.  thereby removing some of the inconsistent naming in the SVG specification (eg: viewBox is camelcase where stroke-width is snail-case).
+
+the standard specification accepts key-value pairs first, once the first of a pair is not a keyword, all other content is written as the content of the tag.  lists are flattened by default.
+
+#+begin_src lisp
+  (svg:svg :xmlns "http://www.w3.org/2000/svg" :version "1.1"
+           :width "120" :height "120" :view-box "0 0 236 120"
+           (svg:rect :x "14" :y "23" :width "250" :height "50"
+                     :fill "green" :stroke "black" :stroke-width "1")
+           (svg:text :x "20" :y "30" :font-size "10px" "all of this" " is " "content"))
+#+end_src
+
+** html5
+HTML5 doesn't actually adhere to the XML standard.  SEXML includes a DTD with most of the current spec in there.  you can extend it with extra attributes or tags if necessary.  in this example we'll add the optional support for outputting the DTD and do so.
+
+#+begin_src lisp
+  (sexml:with-compiletime-active-layers (sexml:standard-sexml sexml:xml-doctype)
+    (sexml:support-dtd "/path/to/sexml/html5.dtd" :<))
+  (<:augment-with-doctype "html" "")
+#+end_src
+
+this will automatically add the dtd when we write the HTML tag.  it's fairly simple to write HTML, as the whole thing is functional.  in this situation, the flattening of lists as arguments in the body of the tags becomes really handy:
+
+#+begin_src lisp
+  (<:html (<:head (<:title "my title"))
+          (<:body (<:h1 :class "mainTitle")
+                  (<:ul (loop for x from 0 below 10 collect (<:li (format nil "item number ~R" x))))))
+#+end_src
+
+** xhtml
+xhtml does adhere to the DTD specification, this makes it somewhat simpler to support it.  we will add the optional support for outputting the DTD and for outputting ie-conditionals.
+
+in this example we are using the dtd from http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd and the ent files from http://www.w3.org/TR/xhtml1/DTD/xhtml-lat1.ent , http://www.w3.org/TR/xhtml1/DTD/xhtml-special.ent and http://www.w3.org/TR/xhtml1/DTD/xhtml-symbol.ent
+
+#+begin_src lisp
+  (sexml:with-compiletime-active-layers (sexml:standard-sexml sexml:xml-doctype sexml:ie-conditionals)
+    (sexml:support-dtd "/tmp/xhtml1-transitional.dtd" :<X))
+  (<x:augment-with-doctype "html" "PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\" \"DTD/xhtml1-transitional.dtd\"")
+#+end_src
+
+just as with the other examples, we can now write xhtml based on functions.  we've thrown in an IE conditional statement which is supposed to be displayed only on IE versions greater than version 5, other conditions can be supplied.
+
+#+begin_src lisp
+  (<x:html :xmlns "http://www.w3.org/1999/xhtml"
+           :xml.lang "en" :lang "en"
+           (<x:head (<x:title "xhtml baby"))
+           (<x:body (<x:h1 :style "color: red" "i am red!")
+                    (<x:!if "IE" "you are running an internet explorer version, later than IE 5... but you're still running IE (i think) :(")))
+#+end_src
+

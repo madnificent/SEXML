@@ -183,8 +183,7 @@ we only load this when swank is loaded.
                                       (attributes entity)))
            (attribute-keywords (mapcar (rcurry #'argument-symbol :keyword)
                                        (attributes entity))))
-      `(#+swank
-        (defmethod swank:arglist-dispatch :around ((symbol (eql ',symbol)) arglist)
+      `((defmethod swank:arglist-dispatch :around ((symbol (eql ',symbol)) arglist)
           (let ((arglist (call-next-method)))
             (setf (swank::arglist.keyword-args arglist)
                   (loop for attr-sym in '(,@attribute-symbols)
