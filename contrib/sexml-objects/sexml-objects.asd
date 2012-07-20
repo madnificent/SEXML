@@ -2,9 +2,9 @@
 (asdf:defsystem sexml-objects
   :version "0"
   :description "Provides CLOS objects for sexml"
-  :maintainer "Farzad <farzadbekran@gmail.com"
-  :author "Farzad <farzadbekran@gmail.com"
-  :licence "BSD-style"
+  :maintainer "Farzad <farzadbekran@gmail.com>"
+  :author "Farzad <farzadbekran@gmail.com>"
+  :licence "Free"
   :depends-on (sexml)
   :serial t
   :components ((:static-file "README")
@@ -28,7 +28,6 @@
 			 (:file "cl-changes")))
 	       (:static-file "sexml-objects.asd" :pathname "sexml-objects.asd")
 	       (:file "package")
-	       (:file "sexml-objects")
-	       (:file "sexml-tags"))
+	       (:file "sexml-objects"))
   ;; :long-description ""
   )
