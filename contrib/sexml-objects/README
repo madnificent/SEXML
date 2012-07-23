@@ -13,15 +13,21 @@ markup for the div.
 HOW TO USE
 
 SEXML-OBJECTS> 
-(sexml:with-compiletime-active-layers (sexml:standard-sexml 
-				      sexml-objects:widget-classes)
-  (sexml:support-dtd (asdf:system-relative-pathname :sexml "html5.dtd") :<))
+(setup-sexml-objects (asdf:system-relative-pathname :sexml "html5.dtd") :< nil)
+
+(this might take a while and generate some style-warnings)
+
+the first argument is the path to dtd to use, second is the target
+package, the third is a list containing any class that you want the
+generated classes to be inherited from or nil if you want only the
+defautls. the classes that you want to inherit from must have a
+:metaclass of attributes-class. see the readme for cl-attribs for more
+info.
 
 note that we define what package to put all the functions and classes in.
 in this case we tell sexml to put the generated stuff in the "<" package.
 this is to keep your working package clean and prevent conflicts with other
 things you might have defined yourself, or imported from other packages.
-
 
 --------------------------------------------------------------------------------
 

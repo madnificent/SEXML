@@ -181,54 +181,33 @@ the plist is made from the :keword attribute and slot-value of the slots."))
 (defun get-template (name)
   (gethash name *templates*))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;DEFINE LAYERED METHOD AND RELATED SEXML CODES;;;;;;;;;;;;;;;;;;;;;;;
-(contextl:deflayer widget-classes)
 
-(contextl:define-layered-method sexml::entity-definition-forms
-  :in-layer widget-classes
-  :around (entity package)
-  (let ((class-symbol (sexml::function-symbol entity package)))
+(defun setup-sexml-objects (dtd-path target-package inherit-list)
+  (eval
+   (read-from-string
+    (concatenate
+      'string
+      "(progn
+     (contextl:deflayer widget-classes)
+     (contextl:define-layered-method sexml::entity-definition-forms :in-layer widget-classes :around (entity package)
+				     (let ((class-symbol (sexml::function-symbol entity package)))
+				       `((defclass ,class-symbol (sexml-objects:widget "
+      (format nil "~{ ~a ~}" inherit-list)
+      ")
+					   ((sexml-objects:%render-func :accessor sexml-objects:%render-func 
+									:initarg :%render-func 
+									:initform #',class-symbol)
+					    ,@(loop for attribute-string in (sexml::attributes entity)
+						 for attribute-symbol = (sexml::argument-symbol attribute-string package)
+						 for attribute-key = (sexml::argument-symbol attribute-string :keyword)
+						 collect `(,attribute-symbol :reader ,(intern (concatenate 'string \"GET-\" (format nil \"~A\" attribute-symbol)))
+									     :writer ,(intern (concatenate 'string \"SET-\" (format nil \"~A\" attribute-symbol)))
+									     :initarg ,attribute-key :initform nil
+									     :attributes (:html-attrib-p t :keyword ,attribute-key))))
+					   (:metaclass cl-attribs:attributes-class))
+					 ,@(call-next-method))))
 
-;;define a class for each tag, they should inherit from widget feel free to add 
-;;your own classes for more functionality. some usefull classes are included in
-;;this system. check cl-binds and cl-changes.
-
-    `((defclass ,class-symbol (sexml-objects:widget)
-
-;;%render-func is the function used to generate the markup for the class, the 
-;;default function is the one created with sexml
-
-	((sexml-objects:%render-func :accessor sexml-objects:%render-func 
-				     :initarg :%render-func 
-				     :initform #',class-symbol)
-	 ,@(loop for attribute-string in (sexml::attributes entity)
-	      for attribute-symbol = (sexml::argument-symbol attribute-string 
-	      	  		     			     package)
-	      for attribute-key = (sexml::argument-symbol attribute-string 
-	      	  		  			  :keyword)
-
-;;define reader and writer methods of each attribute. I use GET-* and SET-* 
-;;methods to make it clear that they are sexml generated attribute methods
-
-	      collect `(,attribute-symbol :reader ,(intern (concatenate 'string 
-	      	      			  "GET-" (format nil "~A" 
-					  	 attribute-symbol)))
-					  :writer ,(intern (concatenate 'string 
-					  "SET-" (format nil "~A" 
-					  	 attribute-symbol)))
-					  :initarg ,attribute-key :initform nil
-
-;;this is some functionality provided by the cl-attribs that allows us to 
-;;define attributes for the slots of a class, these attribs are used by
-;;sexml-objects to render the markup for the class.
-;;the :html-attrib-p tells sexml-objects that this slot contains a attribute
-;;that should be inserted in the markup. :keyword is the keyword that will be
-;;sent to the %render-func along with the value of this slot. 
-
-					  :attributes (:html-attrib-p t :keyword 
-					  	      ,attribute-key))))
-
-;;the attributes-class is the metaclass for every object that sexml-objects
-;;creates
-
-	(:metaclass cl-attribs:attributes-class))
-      ,@(call-next-method))))
+     (sexml:with-compiletime-active-layers (sexml:standard-sexml sexml-objects:widget-classes)
+       (sexml:support-dtd "
+      (format nil "\"~a\" :~a" dtd-path target-package)
+      ")))"))))
