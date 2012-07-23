@@ -12,9 +12,6 @@
   (:metaclass attributes-class))
 
 ;;;;generates automated-id for instances
-;;if the :set-as-html-id-p slot-attrib of the %id slot is set to t,
-;;the value is set as the id attribute of the widget as well to be
-;;rendered as the value for the id attribute of the widget
 (let ((instance-count-table (make-hash-table :test 'equal)))
 
   (defmethod initialize-instance :after ((obj widget) &rest initargs)
@@ -131,3 +128,107 @@ the plist is made from the :keword attribute and slot-value of the slots."))
 		  (let ((index-from-end (- (length children) index)))
 		    (append (subseq children 0 (1- index-from-end)) (subseq children index-from-end)))
 		  (append (subseq children 0 index) (subseq children (1+ index))))))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;HELPER MACRO FOR EASY DEFINING OF UI;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defun setup-children (input)
+  (loop
+     for item in (cdr input)
+     for item-counter = 0 then (1+ item-counter)
+     with start-collecting = nil
+     with results = nil
+     do
+       (if (null start-collecting)
+	   (cond ((and (evenp item-counter) (null (keywordp item)))
+		  (setf start-collecting t)
+		  (push item results)))
+	   (push item results))
+     finally
+       (setf results (reverse results))
+       (return (if results
+		   (concatenate 'list (subseq input 0 (position (car results) input)) `(:%children (list ,@results)))
+		   input))))
+
+(defun expand-to-sexp (input)
+  (if input
+      (if (listp input)
+	  (if (listp (car input))
+	      `(,@(cons (expand-to-sexp (car input)) (mapcar #'expand-to-sexp (cdr input))))
+	      (let ((class nil))
+		(ignore-errors (setf class (find-class (car input))))
+		(cond (class
+		       (if (null (closer-mop:class-finalized-p class)) (closer-mop:finalize-inheritance class))
+		       (if (find (find-class 'widget) (closer-mop:class-precedence-list class))
+			   (progn
+			     (setf input (setup-children input))
+			     `(make-instance ',(car input) ,@(mapcar #'expand-to-sexp (cdr input))))
+			   (cons (car input) (mapcar #'expand-to-sexp (cdr input)))))
+		      (t (cons (car input) (mapcar #'expand-to-sexp (cdr input)))))))
+	  input)
+      'nil))
+
+(defmacro define-ui (&body body)
+  `(progn ,@(mapcar #'expand-to-sexp body)))
+
+
+(defparameter *templates* (make-hash-table))
+
+(defmacro define-template ((&optional name) &body body)
+  (if name
+      `(setf (gethash ',name *templates*) (lambda () (define-ui ,@body)))
+      `(lambda () (define-ui (,@body)))))
+
+(defun get-template (name)
+  (gethash name *templates*))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;DEFINE LAYERED METHOD AND RELATED SEXML CODES;;;;;;;;;;;;;;;;;;;;;;;
+(contextl:deflayer widget-classes)
+
+(contextl:define-layered-method sexml::entity-definition-forms
+  :in-layer widget-classes
+  :around (entity package)
+  (let ((class-symbol (sexml::function-symbol entity package)))
+
+;;define a class for each tag, they should inherit from widget feel free to add 
+;;your own classes for more functionality. some usefull classes are included in
+;;this system. check cl-binds and cl-changes.
+
+    `((defclass ,class-symbol (sexml-objects:widget)
+
+;;%render-func is the function used to generate the markup for the class, the 
+;;default function is the one created with sexml
+
+	((sexml-objects:%render-func :accessor sexml-objects:%render-func 
+				     :initarg :%render-func 
+				     :initform #',class-symbol)
+	 ,@(loop for attribute-string in (sexml::attributes entity)
+	      for attribute-symbol = (sexml::argument-symbol attribute-string 
+	      	  		     			     package)
+	      for attribute-key = (sexml::argument-symbol attribute-string 
+	      	  		  			  :keyword)
+
+;;define reader and writer methods of each attribute. I use GET-* and SET-* 
+;;methods to make it clear that they are sexml generated attribute methods
+
+	      collect `(,attribute-symbol :reader ,(intern (concatenate 'string 
+	      	      			  "GET-" (format nil "~A" 
+					  	 attribute-symbol)))
+					  :writer ,(intern (concatenate 'string 
+					  "SET-" (format nil "~A" 
+					  	 attribute-symbol)))
+					  :initarg ,attribute-key :initform nil
+
+;;this is some functionality provided by the cl-attribs that allows us to 
+;;define attributes for the slots of a class, these attribs are used by
+;;sexml-objects to render the markup for the class.
+;;the :html-attrib-p tells sexml-objects that this slot contains a attribute
+;;that should be inserted in the markup. :keyword is the keyword that will be
+;;sent to the %render-func along with the value of this slot. 
+
+					  :attributes (:html-attrib-p t :keyword 
+					  	      ,attribute-key))))
+
+;;the attributes-class is the metaclass for every object that sexml-objects
+;;creates
+
+	(:metaclass cl-attribs:attributes-class))
+      ,@(call-next-method))))

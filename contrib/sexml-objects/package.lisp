@@ -14,5 +14,8 @@
 	   get-html-attributes
 	   widgetp
 	   add-child
-	   remove-child))
+	   remove-child
+	   define-ui
+	   define-template
+	   get-template))
 

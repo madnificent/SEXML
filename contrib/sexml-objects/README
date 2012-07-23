@@ -12,98 +12,15 @@ markup for the div.
 
 HOW TO USE
 
-To start useing sexml-objects you need a DTD. there is a html5.dtd included with
-the sexml package that you can use. To generate the functions and classes from
-that DTD this is what you should do:
-
-CL-USER> (asdf:load-system :sexml-objects)
-
-CL-USER> (in-package :sexml-objects)
-#<PACKAGE "SEXML-OBJECTS">
-
-
-;; define a layer where we will put our widget classes
-SEXML-OBJECTS> (contextl:deflayer widget-classes)
-#<CONTEXTL:STANDARD-LAYER-CLASS WIDGET-CLASSES {BE9BD41}>
-
-
-;;what we are doing here is basically defining a layered-method (read macro :P)
-;;that sexml will run for each tag it finds in the DTD.
-SEXML-OBJECTS> 
-(contextl:define-layered-method sexml::entity-definition-forms
-  :in-layer widget-classes
-  :around (entity package)
-  (let ((class-symbol (sexml::function-symbol entity package)))
-
-;;define a class for each tag, they should inherit from widget feel free to add 
-;;your own classes for more functionality. some usefull classes are included in
-;;this system. check cl-binds and cl-changes.
-
-    `((defclass ,class-symbol (sexml-objects:widget)
-
-;;%render-func is the function used to generate the markup for the class, the 
-;;default function is the one created with sexml
-
-	((sexml-objects:%render-func :accessor sexml-objects:%render-func 
-				     :initarg :%render-func 
-				     :initform #',class-symbol)
-	 ,@(loop for attribute-string in (sexml::attributes entity)
-	      for attribute-symbol = (sexml::argument-symbol attribute-string 
-	      	  		     			     package)
-	      for attribute-key = (sexml::argument-symbol attribute-string 
-	      	  		  			  :keyword)
-
-;;define reader and writer methods of each attribute. I use GET-* and SET-* 
-;;methods to make it clear that they are sexml generated attribute methods
-
-	      collect `(,attribute-symbol :reader ,(intern (concatenate 'string 
-	      	      			  "GET-" (format nil "~A" 
-					  	 attribute-symbol)))
-					  :writer ,(intern (concatenate 'string 
-					  "SET-" (format nil "~A" 
-					  	 attribute-symbol)))
-					  :initarg ,attribute-key :initform nil
-
-;;this is some functionality provided by the cl-attribs that allows us to 
-;;define attributes for the slots of a class, these attribs are used by
-;;sexml-objects to render the markup for the class.
-;;the :html-attrib-p tells sexml-objects that this slot contains a attribute
-;;that should be inserted in the markup. :keyword is the keyword that will be
-;;sent to the %render-func along with the value of this slot. 
-
-					  :attributes (:html-attrib-p t :keyword 
-					  	      ,attribute-key))))
-
-;;the attributes-class is the metaclass for every object that sexml-objects
-;;creates
-
-	(:metaclass cl-attribs:attributes-class))
-      ,@(call-next-method))))
-#<CONTEXTL:LAYERED-METHOD ENTITY-DEFINITION-FORMS #<LAYER WIDGET-CLASSES 
-			    			  	  {C25BD21}>
-			  		   (:AROUND) (#<BUILT-IN-CLASS T>
-                                                      #<BUILT-IN-CLASS T>) 
-							      {C256EB9}>
-
-;;now we need to tell sexml what DTD we want to be used to generate functions
-;;and classes.
-
-;;this is the layer that we
-;;put our layered-method in
-
-SEXML-OBJECTS> (contextl:ensure-active-layer 'widget-classes)
-
-;;now the magic form:
-
 SEXML-OBJECTS> 
 (sexml:with-compiletime-active-layers (sexml:standard-sexml 
 				      sexml-objects:widget-classes)
   (sexml:support-dtd (asdf:system-relative-pathname :sexml "html5.dtd") :<))
 
-;;note that we define what package to put all the functions and classes in
-;;in this case we tell sexml to put the generated stuff in the "<" package
-;;this is to keep your working package clean and prevent conflicts with other
-;;things you might have defined yourself, or imported from other packages
+note that we define what package to put all the functions and classes in.
+in this case we tell sexml to put the generated stuff in the "<" package.
+this is to keep your working package clean and prevent conflicts with other
+things you might have defined yourself, or imported from other packages.
 
 
 --------------------------------------------------------------------------------
@@ -111,7 +28,6 @@ SEXML-OBJECTS>
 OK NOW WHAT?
 
 now lets try and use what we created:
-
 
 SEXML-OBJECTS> 
 (defparameter obj (make-instance '<:div :id "my new div" 
@@ -132,6 +48,67 @@ SEXML-OBJECTS> (render-markup obj)
 				 parent div<br/><input type=\"button\"
 				 value=\"press me!\"/></div>"
 
+note that you can add functions as children, this will give you the
+results of the function to be rendered in the markup.
+
+
+DEFINE-UI
+
+if you want your code look more like html markup and easy to
+read/type, you can use a macro called define-ui like this:
+
+SEXML-OBJECTS> (define-ui (<:div :id "my id"
+				 (<:table 
+				  (<:tr
+				   (<:td "my content")))))
+#<<:DIV {CE19EB1}>
+
+this will expand to:
+
+(PROGN
+ (MAKE-INSTANCE '<:DIV :ID "my id" :%CHILDREN
+                (LIST
+                 (MAKE-INSTANCE '<:TABLE :%CHILDREN
+                                (LIST
+                                 (MAKE-INSTANCE '<:TR :%CHILDREN
+                                                (LIST
+                                                 (MAKE-INSTANCE '<:TD
+                                                                :%CHILDREN
+                                                                (LIST
+                                                                 "my content")))))))))
+
+this is really useful if you are going to make a long markup as it
+will reduce the code to type and improves readablity alot, as ther is
+no need to type extra make-instance, list and :%children anymore.
+
+
+DEFINE-TEMPLATE
+
+sometimes you need to reuse some piece of markup many times, for this
+reason you may use define-template like this to create a function that
+will give you the desired markup:
+
+SEXML-OBJECTS> 
+(define-template (test-header)
+  (<:tr
+   (<:th "Select")
+   (<:th "Name")
+   (<:th "A")
+   (<:th "B")
+   (<:th "C")
+   (<:th "D")
+   (<:th "Edit")))
+#<FUNCTION (LAMBDA ()) {E6A8D7D}>
+
+SEXML-OBJECTS> (get-template 'test-header)
+#<FUNCTION (LAMBDA ()) {E6A8D7D}>
+T
+
+SEXML-OBJECTS> (funcall (get-template 'test-header))
+#<<:TR {CCE0721}>
+
+SEXML-OBJECTS> (render-markup *)
+"<tr><th>Select</th><th>Name</th><th>A</th><th>B</th><th>C</th><th>D</th><th>Edit</th></tr>"
 --------------------------------------------------------------------------------
 
 WHAT ELSE?
@@ -157,7 +134,7 @@ SEXML-OBJECTS> (%children obj)
 
 
 WIDGETP
-quit obvius!
+quite obvius!
 
 SEXML-OBJECTS> (widgetp obj)
 T
@@ -221,32 +198,36 @@ out of sexml-objects.
 
 %render-func
 this is a slot that the function refrenced by its value is used to get the 
-markup for the object and its children.
+markup for the object and its children. the default is the function tha sexml
+creates automatically.
 
 render-murkup
 this is a generic method so you can specialize it or define :bfore :after methods
+for it. i will be called when we want to generate markup for a given object.
 
 for example:
 this is the way i make a special check-box that manages its own label with the 
 value given in its %label slot
 
 (defclass check-box (<:input)
-  ((<::type    :reader   get-type    :writer  set-type :initarg  :type :initform   "checkbox")
+  ((<::type    :reader   get-type    :writer  set-type :initarg  :type 
+  	       :initform   "checkbox")
    (%label     :accessor %label      :initarg :%label  :initform ""))
   (:metaclass attributes-class))
 
 (defmethod render-markup ((check-box check-box))
   (concatenate 'string
 	       (call-next-method)
-	       (render-markup (make-instance '<:label :for (get-id check-box)
-					     :%id (concatenate 'string (%id check-box) "-LABEL")
-					     :%children (%label check-box)))))
+	       (render-markup 
+	         (make-instance '<:label :for (get-id check-box)
+		 		:%id (concatenate 'string (%id check-box) "-LABEL")
+				:%children (%label check-box)))))
 
-thing to note about this:
+things to note about this:
 
-i redefine type slot to have a initform of "checkbox" so that i wont need to
-give it on the make-instance form. as the symbol is internal inside the "<"
-package i use <::type for redefining it.
+i redefine type slot to have a initform of "checkbox" so that i wont
+need to give it on the make-instance form. as the symbol is internal
+inside the "<" package i use <::type for redefining it.
 
 :metaclass should be attributes-class as for any sexml-objects class
 
@@ -261,12 +242,38 @@ SEXML-OBJECTS> (make-instance 'check-box :%label "test label" :id "cb")
 SEXML-OBJECTS> (render-markup *)
 "<input id=\"cb\" type=\"checkbox\"/><label for=\"cb\">test label</label>"
 
+
+ANOTHER EXAMPLE FOR EXTENDING THE DEFAULT BEHAVIOUR:
+
+note that you can extend the behaviour of the objects by inheriting
+from the default classes. for example:
+
+(defclass xdiv (<:div)
+  ((%id :accessor %id :initarg :%id :initform nil 
+  	:attributes (:set-as-html-id-p t)))
+  (:metaclass attributes-class))
+
+(defmethod initialize-instance :after ((obj xdiv) &rest initargs)
+    (declare (ignore initargs))
+    (if (slot-attrib obj '%id :set-as-html-id-p)
+	(set-id (%id obj) obj)))
+
+what this code does is that whenever you create an xdiv object, it
+will check the ':set-as-html-id-p' 'slot-attrib' of the objects, and
+if the value is t then it will set the objects id value to the same
+value as %id that was generated by the sexml-objects. so if the object
+has an %id of "DIV-4" its rendered markup will be: <div
+id="DIV-4"></div>
+
+the :metaclass of the classes created with sexml-objects is
+'attributes-class'. for more info about the attributes-class see the
+readme file in the cl-attribs directory.
 --------------------------------------------------------------------------------
 
 Contact Info
 
-If u find bugs or have any idea about making sexml-objects better please contact
-me at:
+If u find bugs or have any ideas about making sexml-objects better
+please contact me at:
 
 farzadbekran@gmail.com
 
@@ -275,21 +282,22 @@ farzadbekran@gmail.com
 Copyright (c) 2012 Farzad Bekran
 
 
-Permission is hereby granted, free of charge, to any person obtaining a copy of this
-software and associated documentation files (the "Software"), to deal in the Software
-without restriction, including without limitation the rights to use, copy, modify, 
-merge, publish, distribute, sublicense, and/or sell copies of the Software, and to 
-permit persons to whom the Software is furnished to do so, subject to the following 
-conditions:
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of this software and associated documentation files (the
+"Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish,
+distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so, subject to
+the following conditions:
 
-The above copyright notice and this permission notice shall be included in all copies 
-or substantial portions of the Software.
+The above copyright notice and this permission notice shall be
+included in all copies or substantial portions of the Software.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, 
-INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A 
-PARTICULAR PURPOSE AND NONINFRINGEMENT. 
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
 
-IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES
-OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING 
-FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE 
-SOFTWARE.
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
