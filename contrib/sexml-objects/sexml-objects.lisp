@@ -184,22 +184,26 @@ the plist is made from the :keword attribute and slot-value of the slots."))
 
 (defun setup-sexml-objects (dtd-path target-package inherit-list)
   (eval
-   (read-from-string
-    (concatenate
-      'string
-      "(progn
+     (read-from-string
+      (concatenate
+       'string
+       "(progn
      (contextl:deflayer widget-classes)
      (contextl:define-layered-method sexml::entity-definition-forms :in-layer widget-classes :around (entity package)
 				     (let ((class-symbol (sexml::function-symbol entity package)))
 				       `((defclass ,class-symbol (sexml-objects:widget "
-      (format nil "~{ ~a ~}" inherit-list)
-      ")
+       (format nil "~{ ~a ~}" inherit-list)
+       ")
 					   ((sexml-objects:%render-func :accessor sexml-objects:%render-func 
 									:initarg :%render-func 
 									:initform #',class-symbol)
 					    ,@(loop for attribute-string in (sexml::attributes entity)
 						 for attribute-symbol = (sexml::argument-symbol attribute-string package)
 						 for attribute-key = (sexml::argument-symbol attribute-string :keyword)
+do 
+(export `(,(intern (concatenate 'string \"GET-\" (format nil \"~A\" attribute-symbol)))
+	  ,(intern (concatenate 'string \"SET-\" (format nil \"~A\" attribute-symbol)))))
+
 						 collect `(,attribute-symbol :reader ,(intern (concatenate 'string \"GET-\" (format nil \"~A\" attribute-symbol)))
 									     :writer ,(intern (concatenate 'string \"SET-\" (format nil \"~A\" attribute-symbol)))
 									     :initarg ,attribute-key :initform nil
@@ -209,5 +213,5 @@ the plist is made from the :keword attribute and slot-value of the slots."))
 
      (sexml:with-compiletime-active-layers (sexml:standard-sexml sexml-objects:widget-classes)
        (sexml:support-dtd "
-      (format nil "\"~a\" :~a" dtd-path target-package)
-      ")))"))))
+       (format nil "\"~a\" :~a" dtd-path target-package)
+       ")))"))))
