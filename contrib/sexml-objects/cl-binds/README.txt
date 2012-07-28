@@ -12,18 +12,32 @@ of the user object and its done. no need to do it by hand!
 
 How To Use
 
-All you have to do is define a class and inherit from "bindable-object". 
-Also your class must have a metaclass of "attributes-class". A slot called 
-%bound-object will be inherited from bindable-object that you will use to 
-specify the object to bind to. To specify which slot is bound to the other 
-object's slot you will use an attribute called :bound-slot-name.
+All you have to do is define a class and inherit from
+"bindable-object".
+
+Also your class must have a metaclass of "attributes-class".
+
+A slot called %bound-object will be inherited from bindable-object
+that you will use to specify the object to bind to.
+
+To specify which slot is bound to the other object's slot you will use
+an attribute called :bound-slot-name.
+
+To have control over the values that get read and written, you can
+specify :read and :write functions via attributes to be called with
+one argument that is the value that has been read, or the value that
+is going to be written. This allows transformations to be done to the
+values. like when you have a time-stamp object bound to some slot and
+you want the bound object to get only a string containing the year.
 
 Example:
 
 CL-BINDS>
 (defclass text-box (bindable-object)
   ((value :accessor value :initform nil :initarg :value 
-          :attributes (:bound-slot-name 'username))
+          :attributes (:bound-slot-name 'username 
+					:reader (lambda (x) (concatenate 'string x " read-value"))
+					:writer (lambda (x) (concatenate 'string x " written-value"))))
    (slot-b :accessor slot-b :initform nil :initarg :slot-b))
   (:metaclass attributes-class))
 
@@ -46,14 +60,18 @@ CL-BINDS> (setf (%bound-object bindable) user-object)
 #<USER {B8FB781}>
 
 CL-BINDS> (value bindable)
-"foo"  ;;this is read from the user-objects username slot as expected.
+"foo read-value" ;; this is read from the user-objects username slot as expected.
+     		 ;; note that the value returned is the result of calling the 
+		 ;; function specified in :reader attribute of the bindable-object
 
 CL-BINDS> (setf (value bindable) "set after bind")
 "set after bind" ;; this will set the username slot of the user-object as value slot 
-                 ;; is bound to username
+                 ;; is bound to username, the value that is set will be the result 
+		 ;; of calling the function specified in :writer attribute of the 
+		 ;; bindable-object 
 
 CL-BINDS> (get-username user-object)
-"set after bind"
+"set after bind written-value"
 
 CL-BINDS> (setf (%bound-object bindable) nil)
 NIL  ;; binding removed, everything is back to normal now.
