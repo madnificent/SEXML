@@ -21,7 +21,13 @@ A slot called %bound-object will be inherited from bindable-object
 that you will use to specify the object to bind to.
 
 To specify which slot is bound to the other object's slot you will use
-an attribute called :bound-slot-name.
+an attribute called :bound-slot.
+
+:bound-slot can be a symbol (the name of the bound-slot) or a list of
+this format:
+
+(:name name-of-the-slot :reader reader-func-to-use :writer
+writer-func-to-use)
 
 To have control over the values that get read and written, you can
 specify :read and :write functions via attributes to be called with
@@ -30,14 +36,17 @@ is going to be written. This allows transformations to be done to the
 values. like when you have a time-stamp object bound to some slot and
 you want the bound object to get only a string containing the year.
 
+if you do not specify any :reader or :writer functions, #'identity
+will be used instead.
+
 Example:
 
 CL-BINDS>
 (defclass text-box (bindable-object)
   ((value :accessor value :initform nil :initarg :value 
-          :attributes (:bound-slot-name 'username 
-					:reader (lambda (x) (concatenate 'string x " read-value"))
-					:writer (lambda (x) (concatenate 'string x " written-value"))))
+          :attributes (:bound-slot (:name 'username 
+				    :reader (lambda (x) (concatenate 'string x " read-value"))
+				    :writer (lambda (x) (concatenate 'string x " written-value"))))
    (slot-b :accessor slot-b :initform nil :initarg :slot-b))
   (:metaclass attributes-class))
 
