@@ -39,7 +39,7 @@
 	    (all-attributes (compute-attribute-inheritance direct-slots)))
 	(setf all-attributes (append (mapcar #'eval all-attributes)))
 	(make-instance 'attributed-effective-slot
-		       :attributes all-attributes
+		       :attributes (copy-tree all-attributes)
 		       :allocation-class class
 		       :allocation (closer-mop:slot-definition-allocation normal-slot)
 		       :class class
