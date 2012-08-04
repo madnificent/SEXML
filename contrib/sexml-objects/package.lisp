@@ -17,6 +17,7 @@
 	   remove-child
 	   define-ui
 	   define-template
+	   define-template-from-file
 	   get-template
 	   setup-sexml-objects))
 

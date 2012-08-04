@@ -149,37 +149,118 @@ the plist is made from the :keword attribute and slot-value of the slots."))
 		   (concatenate 'list (subseq input 0 (position (car results) input)) `(:%children (list ,@results)))
 		   input))))
 
-(defun expand-to-sexp (input)
+(defun expand-to-sexp (input &optional (package '<))
   (if input
       (if (listp input)
 	  (if (listp (car input))
 	      `(,@(cons (expand-to-sexp (car input)) (mapcar #'expand-to-sexp (cdr input))))
 	      (let ((class nil))
-		(ignore-errors (setf class (find-class (car input))))
+		(setf class (or (ignore-errors (find-class (car input)))
+				(ignore-errors (find-class (intern (string (car input)) (find-package package))))))
 		(cond (class
 		       (if (null (closer-mop:class-finalized-p class)) (closer-mop:finalize-inheritance class))
 		       (if (find (find-class 'widget) (closer-mop:class-precedence-list class))
 			   (progn
 			     (setf input (setup-children input))
-			     `(make-instance ',(car input) ,@(mapcar #'expand-to-sexp (cdr input))))
+			     `(make-instance ',(class-name class) ,@(mapcar #'expand-to-sexp (cdr input))))
 			   (cons (car input) (mapcar #'expand-to-sexp (cdr input)))))
 		      (t (cons (car input) (mapcar #'expand-to-sexp (cdr input)))))))
 	  input)
       'nil))
 
-(defmacro define-ui (&body body)
-  `(progn ,@(mapcar #'expand-to-sexp body)))
-
+(defmacro define-ui ((&optional (package '<)) &body body)
+  `(progn ,@(mapcar (lambda (part) (expand-to-sexp part package)) body)))
 
 (defparameter *templates* (make-hash-table))
 
-(defmacro define-template ((&optional name) &body body)
+(defmacro define-template ((&optional name (package '<)) &body body)
   (if name
-      `(setf (gethash ',name *templates*) (lambda () (define-ui ,@body)))
-      `(lambda () (define-ui (,@body)))))
+      `(setf (gethash ',name *templates*) (lambda () (define-ui (,package) ,@body)))
+      `(lambda () (define-ui (,package) (,@body)))))
 
 (defun get-template (name)
   (gethash name *templates*))
+
+(defmacro define-template-from-file ((template-name file-spec &optional (package '<)))
+  (let ((file-spec (eval file-spec)))
+    `(setf (gethash ',template-name *templates*)
+	   (lambda () (define-ui (,package) ,(read-from-string (convert-html-string (read-template-file file-spec)) nil))))))
+
+(defun read-template-file (file-spec)
+  (let ((input-string ""))
+    (with-open-file (file-stream file-spec)
+      (loop for line = (read-line file-stream nil 'foo)
+	 until (eq line 'foo)
+	 do (setf input-string (concatenate 'string input-string line (string #\newline)))))
+    input-string))
+
+(defun convert-html-string (string)
+  (let ((result ""))
+    (with-input-from-string (stream string)
+      (loop for c = (read-char stream nil #\null)
+	 do (cond ((and (char= c #\<) (char= (peek-char nil stream) #\!))
+		   (loop for c = (read-char stream)
+		      until (char= c #\>)))
+		  ((char= c #\<)
+		   (setf result (concatenate 'string result (read-tag stream) " ")))
+		  ((char= c #\null) (return-from convert-html-string result))
+		  (t
+		   (cond ((not (char= (peek-char t stream nil #\null) #\<))
+			  (unread-char c stream)
+			  (setf result (concatenate 'string result "\"" (read-tag-content stream) "\"")))
+			 (t
+			  (unread-char c stream)
+			  (cond ((not (char= (peek-char t stream nil #\null) #\<))
+				 (setf result (concatenate 'string result "\"" (read-tag-content stream) "\""))))))))))))
+
+(defun read-tag (stream)
+  (let ((result "("))
+    (if (char= (peek-char nil stream) #\/)
+	(progn
+	  (loop for c = (read-char stream)
+	     while (not (char= c #\>)))
+	  (return-from read-tag ")"))
+	(progn
+	  (loop for c = (read-char stream nil #\null)
+	     do (cond ((and (char= c #\space) (not (char= (peek-char t stream) #\/)) (not (char= (peek-char t stream) #\>)))
+		       (setf result (concatenate 'string result (read-attrib stream))))
+		      ((char= c #\/)
+		       (read-char stream)
+		       (setf result (concatenate 'string result " )"))
+		       (return-from read-tag result))
+		      ((char= c #\>)
+		       (return-from read-tag result))
+		      ((char= c #\null)
+		       (return-from read-tag result))
+		      (t 
+		       (setf result (concatenate 'string result (string c))))))))))
+
+(defun read-attrib (stream)
+  (let ((attrib-name " :")
+	(result ""))
+    (loop for c = (read-char stream nil #\null)
+       do (setf attrib-name (concatenate 'string attrib-name (string c)))
+       until (char= (peek-char t stream nil #\null) #\=))
+    (read-char stream)
+    (setf result (concatenate 'string attrib-name " " (read-string stream)))
+    result))
+
+(defun read-string (stream)
+  (let ((result "\""))
+    (read-char stream)
+    (loop for c = (read-char stream nil #\null)
+       do (setf result (concatenate 'string result (string c)))
+       until (char= c #\"))
+    result))
+
+(defun read-tag-content (stream)
+  (let ((result ""))
+    (loop for c = (read-char stream nil #\null)
+       do (setf result (concatenate 'string result (string c)))
+       until (or (char= (peek-char nil stream nil #\null) #\<)
+		 (char= (peek-char nil stream nil #\null) #\null)))
+    (concatenate 'string  result )))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;DEFINE LAYERED METHOD AND RELATED SEXML CODES;;;;;;;;;;;;;;;;;;;;;;;
 
 (defun setup-sexml-objects (dtd-path target-package inherit-list)
