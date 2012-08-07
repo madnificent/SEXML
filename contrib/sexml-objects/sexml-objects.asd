@@ -26,6 +26,12 @@
 			((:static-file "README.txt" :pathname "README.txt")
 			 (:file "package")
 			 (:file "cl-changes")))
+	       (:module cl-validations
+			:serial t
+			:components
+			((:static-file "README.txt" :pathname "README.txt")
+			 (:file "package")
+			 (:file "cl-validations")))
 	       (:static-file "sexml-objects.asd" :pathname "sexml-objects.asd")
 	       (:file "package")
 	       (:file "sexml-objects"))
