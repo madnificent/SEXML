@@ -19,5 +19,6 @@
 	   define-template
 	   define-template-from-file
 	   get-template
+	   with-template
 	   setup-sexml-objects))
 
