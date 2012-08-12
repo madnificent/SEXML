@@ -65,9 +65,9 @@
 
 (defmethod closer-mop:compute-slots ((class attributes-class))
   (let* ((slots (call-next-method))
-	 (attributes (loop for slot in slots
-			if (attributed-slot-p slot)
-			collect (cons (closer-mop:slot-definition-name slot) (list (attributes slot))))))
+	 (attributes (copy-tree (loop for slot in slots
+				   if (attributed-slot-p slot)
+				   collect (cons (closer-mop:slot-definition-name slot) (list (attributes slot)))))))
     (cons (make-instance 'closer-mop:standard-effective-slot-definition
 			 :name '%all-attributes
 			 :initform attributes
@@ -121,38 +121,9 @@ use this format to set slot-value and slot-attribs at once:
       (call-next-method)))
 
 (defmethod initialize-instance :around ((object attributes-object) &rest initargs)
+  (declare (ignore initargs))
   (let* ((all-slots (closer-mop:class-slots (class-of object)))
-	 (init-pairups (pairup-list initargs))
-	 (attribed-pairs nil)
-	 (replaced-pairs nil))
-    (mapcar (lambda (pair)
-	      (cond ((ignore-errors (eq (car (second pair)) :value/attribs))
-		     (push (copy-list pair) attribed-pairs))))
-	    init-pairups)
-    (mapcar (lambda (slot)
-	      (mapcar (lambda (pair)
-			(declare (special pair))
-			(cond ((eq (car (closer-mop:slot-definition-initargs slot)) (first pair))
-			       (push (list (first pair) (second (getf (car (rest pair)) :value/attribs))) replaced-pairs))))
-		      attribed-pairs))
-	    all-slots)
-    (setf object (call-next-method))
-    (let ((final-attribs
-	    (remove nil (mapcar (lambda (slot)
-		       (let* ((slot-keyword (car (closer-mop:slot-definition-initargs slot)))
-			      (slot-attribs (cadr (assoc (closer-mop:slot-definition-name slot) (slot-value object '%all-attributes))))
-			      (to-be-set-attribs (cadr (assoc slot-keyword replaced-pairs)))
-			      (to-be-set-value (car (cadadr (assoc slot-keyword attribed-pairs)))))
-			 (mapcar (lambda (to-be-set-attrib)
-				   (cond ((getf slot-attribs (car to-be-set-attrib))
-					  (setf (getf slot-attribs (car to-be-set-attrib)) (cadr to-be-set-attrib))
-					  (setf to-be-set-attribs
-						(remove (cadr to-be-set-attrib)
-							(remove (car to-be-set-attrib) to-be-set-attribs))))))
-				 (pairup-list to-be-set-attribs))
-			 (if to-be-set-value (setf (slot-value object (closer-mop:slot-definition-name slot)) to-be-set-value))
-			 (if (or slot-attribs to-be-set-attribs)
-			     (list (closer-mop:slot-definition-name slot) (append slot-attribs to-be-set-attribs)))))
-		     all-slots))))
-      (setf (slot-value object '%all-attributes) final-attribs))
-    object))
+	 (attributes-slot (find '%all-attributes all-slots :key #'closer-mop:slot-definition-name))
+	 (inherited-attributes (copy-tree (funcall (closer-mop:slot-definition-initfunction attributes-slot)))))
+    (setf (slot-value object '%all-attributes) inherited-attributes)
+    (call-next-method)))
