@@ -178,7 +178,7 @@ the plist is made from the :keword attribute and slot-value of the slots."))
 (defmacro define-template ((&optional name (package '<)) &body body)
   (if name
       `(setf (gethash ',name *templates*) (lambda () (define-ui (,package) ,@body)))
-      `(lambda () (define-ui (,package) (,@body)))))
+      `(lambda () (define-ui (,package) ,@body))))
 
 (defun get-template (name)
   (gethash name *templates*))
