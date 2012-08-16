@@ -110,9 +110,9 @@ use this format to set slot-value and slot-attribs at once:
       (setf (cadr (assoc slot-name (slot-value object '%all-attributes))) (rest new-value))))
 
 (defmethod (setf closer-mop:slot-value-using-class) :around (new-value (class attributes-class) (object attributes-object) (slotd attributed-effective-slot))
-  (if (and (slot-boundp object '%all-attributes) (listp new-value) (ignore-errors (getf new-value :value/attribs)))
-      (let ((value (car (getf new-value :value/attribs)))
-	    (attrib-pairs (pairup-list (cadr (getf new-value :value/attribs))))
+  (if (and (slot-boundp object '%all-attributes) (listp new-value) (equal (car new-value) :value/attribs))
+      (let ((value (second new-value))
+	    (attrib-pairs (pairup-list (third new-value)))
 	    (slot-name (closer-mop:slot-definition-name slotd)))
 	(setf (slot-value object slot-name) value)
 	(dolist (pair attrib-pairs)
