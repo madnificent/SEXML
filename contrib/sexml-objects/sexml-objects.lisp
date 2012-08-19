@@ -187,8 +187,7 @@ the plist is made from the :keword attribute and slot-value of the slots."))
   (let ((file-spec (eval file-spec)))
     `(progn
        (setf (gethash ',template-name *templates*)
-	     (lambda () (define-ui (,package) ,(read-from-string (convert-html-string (read-template-file file-spec)) nil))))
-       (funcall (get-template ',template-name)))))
+	     (lambda () (define-ui (,package) ,(read-from-string (convert-html-string (read-template-file file-spec)) nil)))))))
 
 (defun read-template-file (file-spec)
   (let ((input-string ""))
@@ -197,6 +196,8 @@ the plist is made from the :keword attribute and slot-value of the slots."))
 	 until (eq line 'foo)
 	 do (setf input-string (concatenate 'string input-string line (string #\newline)))))
     input-string))
+
+(defparameter *parser-remove-white-space* t "if non nil, html parser will remove white space from parsed result.")
 
 (defun convert-html-string (string)
   (let ((result ""))
@@ -214,7 +215,11 @@ the plist is made from the :keword attribute and slot-value of the slots."))
 		 (t
 		  (cond ((not (and (char= c #\<) (char= (peek-char t stream nil #\null) #\<)))
 			 (unread-char c stream)
-			 (setf result (concatenate 'string result "\"" (read-tag-content stream) "\""))))))
+			 (let ((tag-content (read-tag-content stream)))
+			   (if *parser-remove-white-space*
+			       (setf tag-content (string-trim '(#\Space #\Tab #\Newline) tag-content)))
+			   (if (> (length tag-content) 0)
+			       (setf result (concatenate 'string result "\"" tag-content "\""))))))))
 	 finally (return-from convert-html-string result)))))
 
 (defun read-tag (stream)
