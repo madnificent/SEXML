@@ -212,13 +212,9 @@ the plist is made from the :keword attribute and slot-value of the slots."))
 		 ((char= c #\<)
 		  (setf result (concatenate 'string result (read-tag stream) " ")))
 		 (t
-		  (cond ((not (char= (peek-char t stream nil #\null) #\<))
+		  (cond ((not (and (char= c #\<) (char= (peek-char t stream nil #\null) #\<)))
 			 (unread-char c stream)
-			 (setf result (concatenate 'string result "\"" (read-tag-content stream) "\"")))
-			(t
-			 (unread-char c stream)
-			 (cond ((not (char= (peek-char t stream nil #\null) #\<))
-				(setf result (concatenate 'string result "\"" (read-tag-content stream) "\""))))))))
+			 (setf result (concatenate 'string result "\"" (read-tag-content stream) "\""))))))
 	 finally (return-from convert-html-string result)))))
 
 (defun read-tag (stream)
