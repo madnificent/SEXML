@@ -63,10 +63,10 @@ DEFINE-UI
 if you want your code look more like html markup and easy to
 read/type, you can use a macro called define-ui like this:
 
-SEXML-OBJECTS> (define-ui (<:div :id "my id"
-				 (<:table 
-				  (<:tr
-				   (<:td "my content")))))
+SEXML-OBJECTS> (define-ui () (<:div :id "my id"
+			     	    (table 
+				     (tr
+				      (td "my content")))))
 #<<:DIV {CE19EB1}>
 
 this will expand to:
@@ -87,12 +87,20 @@ this is really useful if you are going to make a long markup as it
 will reduce the code to type and improves readablity alot, as ther is
 no need to type extra make-instance, list and :%children anymore.
 
+note: define-ui has an optional arg called package, defaulting to < if
+supplied, define-ui will check the given package and current package
+for the classes that inherit from widget class. if it finds the class
+symbol in the current package or the given package and it inherits
+from widget class, it will convert the form.
 
 DEFINE-TEMPLATE
 
 sometimes you need to reuse some piece of markup many times, for this
 reason you may use define-template like this to create a function that
-will give you the desired markup:
+will give you the desired markup, define-template also has the
+optional package arg like define-ui. if you dont supply a template
+name, you will only get a lambda that will generate the widget-tree
+and you wont be able to call get-template for that template:
 
 SEXML-OBJECTS> 
 (define-template (test-header)
@@ -115,6 +123,84 @@ SEXML-OBJECTS> (funcall (get-template 'test-header))
 
 SEXML-OBJECTS> (render-markup *)
 "<tr><th>Select</th><th>Name</th><th>A</th><th>B</th><th>C</th><th>D</th><th>Edit</th></tr>"
+
+DEFINE-TEMPLATE-FROM-FILE
+
+You can use a html file to define templates and use them later like
+this: lets say I have a login-page.html file on my desktop that has
+this markup inside it:
+
+<html><head>
+</head>
+<body>
+<p> 
+  welcome <# (format nil " ~a " *username*) #> please login to continue!
+</p>
+<table>
+  <tbody>
+    <tr>
+      <td>username:<br />
+      </td>
+      <td><input name="username" /><br />
+      </td>
+    </tr>
+    <tr>
+      <td>password:<br />
+      </td>
+      <td><input name="password" /><br />
+      </td>
+    </tr>
+    <tr>
+      <td><input value="Login" name="Login" type="submit" /><br />
+      </td>
+    </tr>
+  </tbody>
+</table>
+</body></html>
+
+note: you can use <# and #> to insert inline lisp froms where you
+want. just dont try something like this: <p id=<# (some lisp form) #>
+/> instead do this: <p <#:id (some lisp form) #> />
+
+notes about templates:
+ * can contain your own widgets if you have defined any
+ * can only have one root element
+ * please make sure you close every tag properly i.e not <br> but <br/>
+ * the parser will ignore comments
+
+now we can make a template out of this:
+
+SEXML-OBJECTS> (defparameter *username* "Farzad Bekran")
+*USERNAME* ;; this is used to greet the user in the template
+
+SEXML-OBJECTS> (setf *parser-remove-white-space* nil)
+NIL ;; dont remove white space so we can read the generated markup
+
+SEXML-OBJECTS> (define-template-from-file (login-page-template "~/Desktop/login-page.html"))
+#<FUNCTION (LAMBDA ()) {EC4E1A5}>
+
+;; now we can use this template to generate markup
+SEXML-OBJECTS> (render-markup (funcall (get-template 'login-page-template)))
+"<html class=\"STD-HTML\" id=\"HTML-10\"><head class=\"STD-HEAD\" id=\"HEAD-11\"></head>
+<body class=\"STD-BODY\" id=\"BODY-10\"><p class=\"STD-P\" id=\"P-30\">welcome  Farzad Bekran  please login to continue!
+</p>
+<table class=\"STD-TABLE\" id=\"TABLE-6\"><tbody class=\"STD-TBODY\" id=\"TBODY-6\"><tr class=\"STD-TR\" id=\"TR-20\"><td class=\"STD-TD\" id=\"TD-30\">username:<br class=\"STD-BR\" id=\"BR-52\"/>
+      </td>
+      <td class=\"STD-TD\" id=\"TD-31\"><input class=\"STD-INPUT\" id=\"INPUT-16\" name=\"username\"/><br class=\"STD-BR\" id=\"BR-53\"/>
+      </td>
+    </tr>
+    <tr class=\"STD-TR\" id=\"TR-21\"><td class=\"STD-TD\" id=\"TD-32\">password:<br class=\"STD-BR\" id=\"BR-54\"/>
+      </td>
+      <td class=\"STD-TD\" id=\"TD-33\"><input class=\"STD-INPUT\" id=\"INPUT-17\" name=\"password\"/><br class=\"STD-BR\" id=\"BR-55\"/>
+      </td>
+    </tr>
+    <tr class=\"STD-TR\" id=\"TR-22\"><td class=\"STD-TD\" id=\"TD-34\"><input class=\"STD-INPUT\" id=\"INPUT-18\" name=\"Login\" type=\"submit\" value=\"Login\"/><br class=\"STD-BR\" id=\"BR-56\"/>
+      </td>
+    </tr>
+  </tbody>
+</table>
+</body></html>"
+
 --------------------------------------------------------------------------------
 
 WHAT ELSE?
@@ -140,7 +226,7 @@ SEXML-OBJECTS> (%children obj)
 
 
 WIDGETP
-quite obvius!
+widget predicate
 
 SEXML-OBJECTS> (widgetp obj)
 T
