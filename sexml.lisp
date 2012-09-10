@@ -4,7 +4,7 @@
 (defun mk-package-object (name)
   "creates a new package object"
   (list (or (find-package name)
-            (make-package name))))
+            (make-package name :use nil ))))
 
 (defun package-exports-symbol (package symbol)
   "makes sure package knows it needs to export symbol, and exports it"
@@ -17,7 +17,8 @@
   (let ((package (first package))
         (exports (rest package)))
     `(defpackage ,(package-name package)
-       (:export ,@exports))))
+       (:export ,@exports)
+       (:use ))))
 
 (defun mk-lisp-symbol (entity package)
   (when (listp package)
@@ -48,6 +49,15 @@
   ((name :initarg :name :reader name))
   (:documentation "represents a possible attribute for an element"))
 
+(defmethod print-object ((elt element) stream)
+  (print-unreadable-object (elt stream :type t :identity t)
+    (format stream "~A: ~{~A~}~:[~;>~]"
+            (name elt) (attributes elt) (subelements-p elt))))
+
+(defmethod print-object ((attr attribute) stream)
+  (print-unreadable-object (attr stream :type t :identity nil)
+    (princ (name attr) stream)))
+ 
 
 (defgeneric function-symbol (element package)
   (:documentation "returns a symbol for the function of element in package")
