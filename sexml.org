@@ -69,6 +69,185 @@ sexml provides a simple way to create a new package from a given DTD.  we've spl
     
   #+end_src
   
+* dtd information
+:PROPERTIES:
+:noweb-ref: dtd-information
+:END:
+parsing the dtd isn't particularly complex, but it is the most complex task around.  we don't aim to do anything especially fancy here, we use cl-ppcre to fetch the relevant pieces of information and just distill what's needed.
+
+** structure of a DTD
+the DTD contains thtree important informative types of information.
+   - ELEMENT :: contains the definition of a tag.  we need to know the name of the tag and whether or not it's empty
+   - ATTLIST :: the list of attributes a tag accepts and which values the attributes may have.  we need the list of attributes as strings for the keyword arguments of the function.
+   - ENTITY :: a DTD specification may contain C-like macros.  they are literal (though nestable) expansions which can be used roughly anywhere.  they have a name to expand from and a string to expand to.
+
+** approach
+the real complexity in the DTD is expanding the entities.  we'll tackle the whole thing as follows:
+   - read in the complete DTD and convert it to three lists.  one for the elements one for the attlist and one for the entities.
+   - expand all entities internally, which means we'll only need to do one pass over the list of enties.
+   - expand the entities in the element and attlist section.
+   - parse the string content of element and attlist into objects for reference by the DTD.
+
+** model
+the model consists of the following:
+   - DTD :: the DTD is given a readable file upon creation which will be parsed at that time.
+   - ELEMENT :: an element contains its string name and a list of attribute-objects which the element accepts.
+   - ATTRIBUTE :: an attribute consists of a string name.
+
+*** class definition
+
+#+begin_src lisp
+  
+  (defclass dtd ()
+    ((path :initarg :path :reader dtd-path)
+     (elements-hash :initform (make-hash-table :test 'equal) :accessor dtd-elements-hash))
+    (:documentation "Datastructure which contains all information of a DTD."))
+  
+  (defclass element ()
+    ((name :initarg :name :reader name)
+     (attributes :initform nil :accessor attributes)
+     (subelements-p :initarg :subelements-p :initform nil :accessor subelements-p)))
+  
+  (defclass attribute ()
+    ((name :initarg :name :reader name))
+    (:documentation "represents a possible attribute for an element"))
+  
+#+end_src
+
+*** correspondence to symbols
+elements and attributes have corresponding symbols.  they are accessible respectively through #'function-symbol and #'argument-symbol.  these are implemented here.
+
+#+begin_src lisp
+  
+  (defgeneric function-symbol (element package)
+    (:documentation "returns a symbol for the function of element in package")
+    (:method ((element element) package)
+      (mk-lisp-symbol (name element) package)))
+  
+  (defgeneric argument-symbol (attribute package)
+    (:documentation "returns a symbol for the argument which can be given to the attribute, imported in package")
+    (:method ((attribute attribute) package)
+      (mk-lisp-symbol (name attribute) package)))
+  
+#+end_src
+
+*** altering the dtd
+accessor methods for adding and finding elements in the dtd
+
+#+begin_src lisp
+  
+  (defgeneric dtd-elements (dtd)
+    (:documentation "returns the elements of the document")
+    (:method (dtd)
+      (loop for val being the hash-values of (dtd-elements-hash dtd)
+         collect val)))
+  
+  (defgeneric add-element (dtd element)
+    (:documentation "adds <element> to the dtd>")
+    (:method ((dtd dtd) (element element))
+      (setf (gethash (name element) (dtd-elements-hash dtd))
+            element)))
+  
+  (defgeneric find-element (dtd name-string)
+    (:documentation "searches for the element representing <name-string> in the dtd")
+    (:method ((dtd dtd) name-string)
+      (gethash name-string (dtd-elements-hash dtd))))
+  
+  (defgeneric add-attribute (element attribute)
+    (:documentation "registers the existence of <attribute> for <element>.")
+    (:method ((element element) (attribute attribute))
+      (push attribute (attributes element))))
+  
+#+end_src
+
+** parsing the DTD
+parsing the DTD is a royal pain in the arse, therefore we bow before the gods that made and maintain CXML.  thanks  Gilbert Baumann and David Lichteblau.  we also kindly accept that it's an LLGPL library as it's just too good for our purpose.
+
+*** hooking it together
+all the previous constructions need to be hooked together, so they generate a nice and complete DTD, based on the input file.
+
+#+begin_src lisp
+  
+  (defun mk-dtd-object (file)
+    (make-instance 'dtd :path file))
+  
+  (defclass dtd-sax-handler (sax:default-handler)
+    ((dtd :initarg :dtd :reader dtd))
+    (:documentation "sax handler which calls the correct methods on its DTD"))
+  
+  (defmethod sax:element-declaration ((handler dtd-sax-handler) name model)
+    (add-element (dtd handler)
+                 (make-instance 'element
+                                :name name
+                                :subelements-p (not (eq model :empty)))))
+  
+  (defmethod sax:attribute-declaration ((handler dtd-sax-handler) element-name attribute-name type default)
+    (declare (ignore type default))
+    (add-attribute (find-element (dtd handler) element-name)
+                   (make-instance 'attribute :name attribute-name)))
+  
+  
+  (defmethod initialize-instance :after ((dtd dtd) &key path &allow-other-keys)
+    (let ((handler (make-instance 'dtd-sax-handler :dtd dtd)))
+      (cxml:parse-dtd-file path handler)))
+  
+#+end_src
+* hooking it all together
+:PROPERTIES:
+:noweb-ref: hooking-everything-together
+:END:
+this chapter describes how everything is connected together. leveraging from each of the used libraries.
+
+the first thing the library will do is create an object to manage all of the information in the DTD.  next up is creating a reference to a new package which will store each of the functions.  for each of the elements in the DTD we'll create a new function.  for each of the functions we'll create the argument list.  from the argument list a trivial implementation can be built which should work for most tags.  this is done in the layer specification.  we also introduce a layered function which helps in outputting the arguments which are given to the function.  by default, this provides support for printing lists of arguments as space separated content.
+
+#+begin_src lisp
+  (define-layered-function entity-definition-forms (entity package)
+    (:documentation "entity-definition-forms is called with an entity and package object (both defined in sexml).  it should return all forms needed to generate the functions.")
+    (:method (entity package)
+      (declare (ignore entity package))
+      nil))
+  
+  (define-layered-function dtd-support-forms (dtd package)
+    (:documentation "returns a list of forms which need to be compiled to support the dtd")
+    (:method (dtd package)
+      nil))
+  
+  (define-layered-function entity-printer-forms (entity attr-var body)
+    (:documentation "produces the forms which will handle the printing of the tags.  <entity> contains the entity which needs to be printed.  <attr-var> contains a symbol which will contain a plist of attribute-value pairs, the keyword must constist of a string at runtime, the value is not specified.  <body> contains a symbol which will contain a list of content which must be printed within the tag."))
+  
+  (define-layered-function tag-attribute-content (content)
+    (:documentation "prints <content> in a way that it's a valid value for an attribute")
+    (:method (content)
+      (typecase content
+        (string
+         (cl-ppcre:regex-replace "\"" content "&quot;"))
+        (list
+         (tag-attribute-content (format nil "~{~A~^ ~}" content)))
+        (T (tag-attribute-content (format nil "~A" content))))))
+  
+  (defun recursively-flatten (&rest args)
+    "recursively flattens a list"
+    (loop for arg in args
+       append (if (listp arg)
+                  (apply #'recursively-flatten arg)
+                  (list arg))))
+  
+  (define-layered-function tag-body-content (content)
+    (:documentation "prints <content> in a way appropriate for xml output.  output functions should use this in order to create correct output.")
+    (:method (content)
+      (format nil "~{~A~}" (recursively-flatten content))))
+  
+  (defmacro support-dtd (file packagename)
+    "adds support for the dtd specified in <file> in package <packagename>, the package needn't exist before."
+    (let ((dtd (mk-dtd-object (eval file)))
+          (package (mk-package-object packagename)))
+      `(progn (eval-when (:compile-toplevel :load-toplevel :execute)
+                ,(package-declaration package))
+              ,@(dtd-support-forms dtd package)
+              ,@(loop for element in (dtd-elements dtd)
+                   collect `(progn ,@(entity-definition-forms element package))))))
+#+end_src
+
 * customization support
 :PROPERTIES:
 :noweb-ref: customization-support
@@ -294,62 +473,6 @@ we simplify the use of sexml's standard xml notation by supplying a layer which 
   
 #+end_src
 
-* hooking it all together
-:PROPERTIES:
-:noweb-ref: hooking-everything-together
-:END:
-this chapter describes how everything is connected together. leveraging from each of the used libraries.
-
-the first thing the library will do is create an object to manage all of the information in the DTD.  next up is creating a reference to a new package which will store each of the functions.  for each of the elements in the DTD we'll create a new function.  for each of the functions we'll create the argument list.  from the argument list a trivial implementation can be built which should work for most tags.  this is done in the layer specification.  we also introduce a layered function which helps in outputting the arguments which are given to the function.  by default, this provides support for printing lists of arguments as space separated content.
-
-#+begin_src lisp
-  (define-layered-function entity-definition-forms (entity package)
-    (:documentation "entity-definition-forms is called with an entity and package object (both defined in sexml).  it should return all forms needed to generate the functions.")
-    (:method (entity package)
-      (declare (ignore entity package))
-      nil))
-  
-  (define-layered-function dtd-support-forms (dtd package)
-    (:documentation "returns a list of forms which need to be compiled to support the dtd")
-    (:method (dtd package)
-      nil))
-  
-  (define-layered-function entity-printer-forms (entity attr-var body)
-    (:documentation "produces the forms which will handle the printing of the tags.  <entity> contains the entity which needs to be printed.  <attr-var> contains a symbol which will contain a plist of attribute-value pairs, the keyword must constist of a string at runtime, the value is not specified.  <body> contains a symbol which will contain a list of content which must be printed within the tag."))
-  
-  (define-layered-function tag-attribute-content (content)
-    (:documentation "prints <content> in a way that it's a valid value for an attribute")
-    (:method (content)
-      (typecase content
-        (string
-         (cl-ppcre:regex-replace "\"" content "&quot;"))
-        (list
-         (tag-attribute-content (format nil "~{~A~^ ~}" content)))
-        (T (tag-attribute-content (format nil "~A" content))))))
-  
-  (defun recursively-flatten (&rest args)
-    "recursively flattens a list"
-    (loop for arg in args
-       append (if (listp arg)
-                  (apply #'recursively-flatten arg)
-                  (list arg))))
-  
-  (define-layered-function tag-body-content (content)
-    (:documentation "prints <content> in a way appropriate for xml output.  output functions should use this in order to create correct output.")
-    (:method (content)
-      (format nil "~{~A~}" (recursively-flatten content))))
-  
-  (defmacro support-dtd (file packagename)
-    "adds support for the dtd specified in <file> in package <packagename>, the package needn't exist before."
-    (let ((dtd (mk-dtd-object (eval file)))
-          (package (mk-package-object packagename)))
-      `(progn (eval-when (:compile-toplevel :load-toplevel :execute)
-                ,(package-declaration package))
-              ,@(dtd-support-forms dtd package)
-              ,@(loop for element in (dtd-elements dtd)
-                   collect `(progn ,@(entity-definition-forms element package))))))
-#+end_src
-
 * managing symbols
 :PROPERTIES:
 :noweb-ref: managing-symbols
@@ -400,126 +523,3 @@ translates strings of external definitions into lispy strings.  very little is k
     (intern entity (find-package package)))
 #+end_src
 
-* dtd information
-:PROPERTIES:
-:noweb-ref: dtd-information
-:END:
-parsing the dtd isn't particularly complex, but it is the most complex task around.  we don't aim to do anything especially fancy here, we use cl-ppcre to fetch the relevant pieces of information and just distill what's needed.
-
-** structure of a DTD
-the DTD contains thtree important informative types of information.
-   - ELEMENT :: contains the definition of a tag.  we need to know the name of the tag and whether or not it's empty
-   - ATTLIST :: the list of attributes a tag accepts and which values the attributes may have.  we need the list of attributes as strings for the keyword arguments of the function.
-   - ENTITY :: a DTD specification may contain C-like macros.  they are literal (though nestable) expansions which can be used roughly anywhere.  they have a name to expand from and a string to expand to.
-
-** approach
-the real complexity in the DTD is expanding the entities.  we'll tackle the whole thing as follows:
-   - read in the complete DTD and convert it to three lists.  one for the elements one for the attlist and one for the entities.
-   - expand all entities internally, which means we'll only need to do one pass over the list of enties.
-   - expand the entities in the element and attlist section.
-   - parse the string content of element and attlist into objects for reference by the DTD.
-
-** model
-the model consists of the following:
-   - DTD :: the DTD is given a readable file upon creation which will be parsed at that time.
-   - ELEMENT :: an element contains its string name and a list of attribute-objects which the element accepts.
-   - ATTRIBUTE :: an attribute consists of a string name.
-
-*** class definition
-
-#+begin_src lisp
-  
-  (defclass dtd ()
-    ((path :initarg :path :reader dtd-path)
-     (elements-hash :initform (make-hash-table :test 'equal) :accessor dtd-elements-hash))
-    (:documentation "Datastructure which contains all information of a DTD."))
-  
-  (defclass element ()
-    ((name :initarg :name :reader name)
-     (attributes :initform nil :accessor attributes)
-     (subelements-p :initarg :subelements-p :initform nil :accessor subelements-p)))
-  
-  (defclass attribute ()
-    ((name :initarg :name :reader name))
-    (:documentation "represents a possible attribute for an element"))
-  
-#+end_src
-
-*** correspondence to symbols
-elements and attributes have corresponding symbols.  they are accessible respectively through #'function-symbol and #'argument-symbol.  these are implemented here.
-
-#+begin_src lisp
-  
-  (defgeneric function-symbol (element package)
-    (:documentation "returns a symbol for the function of element in package")
-    (:method ((element element) package)
-      (mk-lisp-symbol (name element) package)))
-  
-  (defgeneric argument-symbol (attribute package)
-    (:documentation "returns a symbol for the argument which can be given to the attribute, imported in package")
-    (:method ((attribute attribute) package)
-      (mk-lisp-symbol (name attribute) package)))
-  
-#+end_src
-
-*** altering the dtd
-accessor methods for adding and finding elements in the dtd
-
-#+begin_src lisp
-  
-  (defgeneric dtd-elements (dtd)
-    (:documentation "returns the elements of the document")
-    (:method (dtd)
-      (loop for val being the hash-values of (dtd-elements-hash dtd)
-         collect val)))
-  
-  (defgeneric add-element (dtd element)
-    (:documentation "adds <element> to the dtd>")
-    (:method ((dtd dtd) (element element))
-      (setf (gethash (name element) (dtd-elements-hash dtd))
-            element)))
-  
-  (defgeneric find-element (dtd name-string)
-    (:documentation "searches for the element representing <name-string> in the dtd")
-    (:method ((dtd dtd) name-string)
-      (gethash name-string (dtd-elements-hash dtd))))
-  
-  (defgeneric add-attribute (element attribute)
-    (:documentation "registers the existence of <attribute> for <element>.")
-    (:method ((element element) (attribute attribute))
-      (push attribute (attributes element))))
-  
-#+end_src
-
-** parsing the DTD
-parsing the DTD is a royal pain in the arse, therefore we bow before the gods that made and maintain CXML.  thanks  Gilbert Baumann and David Lichteblau.  we also kindly accept that it's an LLGPL library as it's just too good for our purpose.
-
-*** hooking it together
-all the previous constructions need to be hooked together, so they generate a nice and complete DTD, based on the input file.
-
-#+begin_src lisp
-  
-  (defun mk-dtd-object (file)
-    (make-instance 'dtd :path file))
-  
-  (defclass dtd-sax-handler (sax:default-handler)
-    ((dtd :initarg :dtd :reader dtd))
-    (:documentation "sax handler which calls the correct methods on its DTD"))
-  
-  (defmethod sax:element-declaration ((handler dtd-sax-handler) name model)
-    (add-element (dtd handler)
-                 (make-instance 'element
-                                :name name
-                                :subelements-p (not (eq model :empty)))))
-  
-  (defmethod sax:attribute-declaration ((handler dtd-sax-handler) element-name attribute-name type default)
-    (declare (ignore type default))
-    (add-attribute (find-element (dtd handler) element-name)
-                   (make-instance 'attribute :name attribute-name)))
-  
-  
-  (defmethod initialize-instance :after ((dtd dtd) &key path &allow-other-keys)
-    (let ((handler (make-instance 'dtd-sax-handler :dtd dtd)))
-      (cxml:parse-dtd-file path handler)))
-  
-#+end_src
