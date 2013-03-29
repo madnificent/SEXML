@@ -49,8 +49,6 @@
   ((name :initarg :name :reader name))
   (:documentation "represents a possible attribute for an element"))
 
-<<<<<<< HEAD
-=======
 (defmethod print-object ((elt element) stream)
   (print-unreadable-object (elt stream :type t :identity t)
     (format stream "~A: ~{~A~}~:[~;>~]"
@@ -59,9 +57,8 @@
 (defmethod print-object ((attr attribute) stream)
   (print-unreadable-object (attr stream :type t :identity nil)
     (princ (name attr) stream)))
- 
 
->>>>>>> be0af67b455b6088d3b906441ca71f06294a29d9
+
 (defgeneric function-symbol (element package)
   (:documentation "returns a symbol for the function of element in package")
   (:method ((element element) package)
@@ -71,6 +68,7 @@
   (:documentation "returns a symbol for the argument which can be given to the attribute, imported in package")
   (:method ((attribute attribute) package)
     (mk-lisp-symbol (name attribute) package)))
+
 
 (defgeneric dtd-elements (dtd)
   (:documentation "returns the elements of the document")
@@ -93,6 +91,7 @@
   (:documentation "registers the existence of <attribute> for <element>.")
   (:method ((element element) (attribute attribute))
     (push attribute (attributes element))))
+
 
 (defun mk-dtd-object (file)
   (make-instance 'dtd :path file))
@@ -174,6 +173,7 @@
         (macroexpand-dammit `(progn ,@body))
       (mapcar #'contextl:ensure-inactive-layer layers-to-activate))))
 
+
 (deflayer sexml-functions ())
 (deflayer sexml-xml-producer ())
 
@@ -219,6 +219,7 @@
       ,@(call-next-method))))
 
   
+
 (deflayer export-function-symbol ())
 
 (define-layered-method entity-definition-forms
@@ -227,6 +228,7 @@
   (let ((symbol (function-symbol entity package)))
     `((export (quote ,symbol) ',(symbol-package symbol))
       ,@(call-next-method))))
+
 
 #+swank
 (deflayer swank-sexml-documented-attributes ())
@@ -252,6 +254,7 @@
           arglist))
       ,@(call-next-method))))
 
+
 (deflayer xml-comments ())
 
 (define-layered-method dtd-support-forms
@@ -262,6 +265,7 @@
         (defun ,function-name (&rest comments)
           (format nil "<!-- ~{~A~} -->" (recursively-flatten comments)))
         (export (quote ,function-name) ',(symbol-package function-name)))))
+
 
 (deflayer ie-conditionals ())
 
@@ -274,6 +278,7 @@
           (format nil "<!--[if ~A]>~{~A~}<![endif]-->" condition (recursively-flatten args)))
       (export (quote ,function-name)
               ',(symbol-package function-name)))))
+
 
 (deflayer xml-doctype ())
 
@@ -312,6 +317,7 @@
                 ',(symbol-package doctype-add-func))
         (export (quote ,doctype-add-dtd)
                 ',(symbol-package doctype-add-dtd)))))
+
 
 (deflayer standard-sexml (export-function-symbol
                          #+swank swank-sexml-documented-attributes
