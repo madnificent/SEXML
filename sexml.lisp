@@ -198,7 +198,16 @@
                  (list attr-var)
                  (list attr-var body))))
 
-  
+(defun sequence-starts-with-p (total-sequence start-sequence)
+  "returns non-nil iff <total-sequence> starts with <start-sequence>"
+  (and (<= (length start-sequence) (length total-sequence))
+       (equalp start-sequence (subseq total-sequence 0 (length start-sequence)))))
+
+(define-condition unknown-key (warning)
+  ((key :initarg :key))
+  (:report (lambda (w stream)
+             (format stream "Unknown keyword ~A" (slot-value w 'key)))))
+
 (define-layered-method entity-definition-forms
   :in-layer sexml-functions
   :around (entity package)
@@ -209,16 +218,20 @@
                                     for expansion in (attributes entity)
                                     append (list key (name expansion)))))
         (defun ,sexp-entity (&rest args)
-          (let* ((keys ,(if (null (subelements-p entity))
-                            `(loop for (a b) on args by #'cddr
-                                append (list (getf key-translations a) b))
-                            `(progn (loop while (keywordp (first args))
-                                   append (list (getf key-translations (pop args)) ;; we pop args, so args contains the body in the end
-                                                (pop args)))))))
-            ,(entity-printer-forms entity 'keys 'args))))
+          (flet ((translate-key (key)
+                   (let ((looked-up-key (getf key-translations key)))
+                     (cond (looked-up-key
+                            looked-up-key)
+                           (t (warn 'unknown-key :key key)
+                              (string-downcase (symbol-name key)))))))
+            (let* ((keys ,(if (null (subelements-p entity))
+                              `(loop for (a b) on args by #'cddr
+                                  append (list (translate-key a) b))
+                              `(progn (loop while (keywordp (first args))
+                                     append (list (translate-key (pop args)) ;; we pop args, so args contains the body in the end
+                                                  (pop args)))))))
+              ,(entity-printer-forms entity 'keys 'args)))))
       ,@(call-next-method))))
-
-  
 
 (deflayer export-function-symbol ())
 
