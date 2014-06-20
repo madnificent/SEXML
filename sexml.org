@@ -229,7 +229,7 @@ the first thing the library will do is create an object to manage all of the inf
     (:method (content)
       (typecase content
         (string
-         (cl-ppcre:regex-replace "\"" content "&quot;"))
+         (cl-ppcre:regex-replace-all "\"" content "&quot;"))
         (list
          (tag-attribute-content (format nil "~{~A~^ ~}" content)))
         (T (tag-attribute-content (format nil "~A" content))))))

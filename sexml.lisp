@@ -136,7 +136,7 @@
   (:method (content)
     (typecase content
       (string
-       (cl-ppcre:regex-replace "\"" content "&quot;"))
+       (cl-ppcre:regex-replace-all "\"" content "&quot;"))
       (list
        (tag-attribute-content (format nil "~{~A~^ ~}" content)))
       (T (tag-attribute-content (format nil "~A" content))))))
@@ -333,7 +333,7 @@
 
 
 (deflayer standard-sexml (export-function-symbol
-                         #+swank swank-sexml-documented-attributes
+                          #+swank swank-sexml-documented-attributes
                           sexml-functions
                           sexml-xml-producer
                           xml-comments))
