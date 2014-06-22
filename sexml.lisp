@@ -313,7 +313,7 @@
                         (concatenate 'string 
                          (funcall ',doctype-func)
                          (apply function args))))))
-        (defmacro ,doctype-add-dtd (tag dtd &key auto-emit-p)
+        (defmacro ,doctype-add-dtd (tag dtd &key (auto-emit-p t))
           (list 'progn
                 (list 'setf ',doctype-var (list
                                            'format 'nil
