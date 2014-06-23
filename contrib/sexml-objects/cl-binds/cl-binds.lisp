@@ -39,8 +39,8 @@ a :bound-slot-name will read/write it's value from/to the slot of %bound-object"
 
 ;;this is just to make sure there is no binding during the init phase, to prevent bound object from getting messed up!
 (defmethod initialize-instance :around ((object bindable-object) &rest initargs)
-  (let ((bound-object (getf initargs :%bound-object)))
-    (setf (getf initargs :%bound-object) nil)
-    (let ((result (call-next-method)))
+  (let ((bound-object (getf initargs :%bound-object))
+	(new-args (concatenate 'list `(:%bound-object nil) initargs)))
+    (let ((result (apply #'call-next-method `(,object ,@new-args))))
       (setf (%bound-object result) bound-object)
       result)))

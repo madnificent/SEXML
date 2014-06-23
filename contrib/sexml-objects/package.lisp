@@ -17,6 +17,9 @@
 	   remove-child
 	   define-ui
 	   define-template
+	   define-template-from-file
+	   *parser-remove-white-space*
 	   get-template
+	   with-template
 	   setup-sexml-objects))
 

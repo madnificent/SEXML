@@ -4,10 +4,11 @@
 
 (defclass widget (attributes-object)
   (;; system related
-   (%id          :accessor %id          :initarg :%id          :initform nil)
-   (%parent      :accessor %parent      :initarg :%parent      :initform nil)
-   (%render-func :accessor %render-func :initarg :%render-func :initform nil)
-   (%children    :accessor %children    :initarg :%children    :initform nil))
+   (%id              :accessor %id              :initarg :%id              :initform nil)
+   (%parent          :accessor %parent          :initarg :%parent          :initform nil)
+   (%render-func     :accessor %render-func     :initarg :%render-func     :initform nil)
+   (%children        :accessor %children        :initarg :%children        :initform nil)
+   (%template-access :accessor %template-access :initarg :%template-access :initform nil))
   (:documentation "this is the base for widget classes")
   (:metaclass attributes-class))
 
@@ -22,7 +23,8 @@
 	(incf (gethash (type-of obj) instance-count-table))
 	(setf (gethash (type-of obj) instance-count-table) 1))
     (if (null (%id obj))
-	(setf (%id obj) (format nil "~a-~a" (type-of obj) (gethash (type-of obj) instance-count-table))))))
+	(setf (%id obj) (format nil "~a-~a" (type-of obj) (gethash (type-of obj) instance-count-table)))
+	(setf (%template-access obj) t))))
 
 ;;;;automatically set parents of the widget children to widget, children must always be in a list
 (defmethod (setf %children) (new-value (widget widget))
@@ -149,37 +151,173 @@ the plist is made from the :keword attribute and slot-value of the slots."))
 		   (concatenate 'list (subseq input 0 (position (car results) input)) `(:%children (list ,@results)))
 		   input))))
 
-(defun expand-to-sexp (input)
+(defun expand-to-sexp (input &optional (package '<))
   (if input
       (if (listp input)
 	  (if (listp (car input))
 	      `(,@(cons (expand-to-sexp (car input)) (mapcar #'expand-to-sexp (cdr input))))
 	      (let ((class nil))
-		(ignore-errors (setf class (find-class (car input))))
+		(setf class (or (ignore-errors (find-class (car input)))
+				(ignore-errors (find-class (intern (string (car input)) (find-package package))))))
 		(cond (class
 		       (if (null (closer-mop:class-finalized-p class)) (closer-mop:finalize-inheritance class))
 		       (if (find (find-class 'widget) (closer-mop:class-precedence-list class))
 			   (progn
 			     (setf input (setup-children input))
-			     `(make-instance ',(car input) ,@(mapcar #'expand-to-sexp (cdr input))))
+			     `(make-instance ',(class-name class) ,@(mapcar #'expand-to-sexp (cdr input))))
 			   (cons (car input) (mapcar #'expand-to-sexp (cdr input)))))
 		      (t (cons (car input) (mapcar #'expand-to-sexp (cdr input)))))))
 	  input)
       'nil))
 
-(defmacro define-ui (&body body)
-  `(progn ,@(mapcar #'expand-to-sexp body)))
-
+(defmacro define-ui ((&optional (package '<)) &body body)
+  `(progn ,@(mapcar (lambda (part) (expand-to-sexp part package)) body)))
 
 (defparameter *templates* (make-hash-table))
 
-(defmacro define-template ((&optional name) &body body)
+(defmacro define-template ((&optional name (package '<)) &body body)
   (if name
-      `(setf (gethash ',name *templates*) (lambda () (define-ui ,@body)))
-      `(lambda () (define-ui (,@body)))))
+      `(setf (gethash ',name *templates*) (lambda () (define-ui (,package) ,@body)))
+      `(lambda () (define-ui (,package) ,@body))))
 
 (defun get-template (name)
   (gethash name *templates*))
+
+(defmacro define-template-from-file ((template-name file-spec &optional (package '<)))
+  (let ((file-spec (eval file-spec)))
+    `(progn
+       (setf (gethash ',template-name *templates*)
+	     (lambda () (define-ui (,package) ,(read-from-string (convert-html-string (read-template-file file-spec)) nil)))))))
+
+(defun read-template-file (file-spec)
+  (let ((input-string ""))
+    (with-open-file (file-stream file-spec)
+      (loop for line = (read-line file-stream nil 'foo)
+	 until (eq line 'foo)
+	 do (setf input-string (concatenate 'string input-string line (string #\newline)))))
+    input-string))
+
+(defparameter *parser-remove-white-space* t "if non nil, html parser will remove white space from parsed result.")
+
+(defun convert-html-string (string)
+  (let ((result ""))
+    (with-input-from-string (stream string)
+      (loop for c = (read-char stream nil #\null)
+	 until (char= c #\null)
+	 do
+	   (cond ((and (char= c #\<) (char= (peek-char nil stream) #\!))
+		  (loop for c = (read-char stream)
+		     until (char= c #\>)))
+		 ((and (char= c #\<) (char= (peek-char nil stream) #\#))
+		  (setf result (concatenate 'string result (read-lisp-form stream))))
+		 ((char= c #\<)
+		  (setf result (concatenate 'string result (read-tag stream) " ")))
+		 (t
+		  (unread-char c stream)
+		  (let ((tag-content (read-tag-content stream)))
+		    (if *parser-remove-white-space*
+			(if (not (every (lambda (c) (member c '(#\Space #\Tab #\Newline))) tag-content))
+			    (setf result (concatenate 'string result "\"" tag-content "\"")))
+			(setf result (concatenate 'string result "\"" tag-content "\""))))))
+	 finally (return-from convert-html-string result)))))
+
+(defun read-tag (stream)
+  (let ((result "("))
+    (if (char= (peek-char nil stream) #\/)
+	(progn
+	  (loop for c = (read-char stream)
+	     while (not (char= c #\>)))
+	  (return-from read-tag ")"))
+	(progn
+	  (setf result (concatenate 'string result (read-tag-name stream)))
+	  (loop for c = (read-char stream nil #\null)
+	     do
+	       (cond ((and (char= c #\<) (char= (peek-char nil stream) #\#))
+		      (setf result (concatenate 'string result " " (read-lisp-form stream) " ")))
+		     ((and (char= c #\space) (not (member c '(#\/ #\> #\<))))
+		      (setf result (concatenate 'string result (read-attrib stream))))
+		     ((char= c #\/)
+		      (read-char stream)
+		      (setf result (concatenate 'string result " )"))
+		      (return-from read-tag result))
+		     ((char= c #\>)
+		      (return-from read-tag result))
+		     ((char= c #\null)
+		      (return-from read-tag result))
+		     (t
+		      (setf result (concatenate 'string result (string c))))))))))
+
+(defun read-attrib (stream)
+  (let ((attrib-name "")
+	(result ""))
+    (loop for c = (read-char stream nil #\null)
+       do (cond ((and (char= c #\<) (char= (peek-char nil stream) #\#))
+		 (return-from read-attrib (concatenate 'string attrib-name " " (read-lisp-form stream))))
+		((or (char= c #\/) (char= c #\>))
+		 (unread-char c stream)
+		 (if (> (length (string-trim '(#\space #\tab #\newline) attrib-name)) 0)
+		     (return-from read-attrib (concatenate 'string "\"" attrib-name "\""))
+		     (return-from read-attrib "")))
+		(t (setf attrib-name (concatenate 'string attrib-name (string c)))))
+       until (char= (peek-char nil stream nil #\null) #\=))
+    (read-char stream)
+    (setf result (concatenate 'string " :" (string-trim '(#\space #\tab #\newline) attrib-name) " " (read-string stream)))
+    result))
+
+(defun read-string (stream)
+  (let ((result "\""))
+    (read-char stream)
+    (loop for c = (read-char stream nil #\null)
+       do (setf result (concatenate 'string result (string c)))
+       until (char= c #\"))
+    result))
+
+(defun read-lisp-form (stream)
+  (let ((result " "))
+    (read-char stream)
+    (loop for c = (read-char stream nil #\null)
+       until (and (char= c #\#) (char= (peek-char nil stream) #\>))
+       do (setf result (concatenate 'string result (string c))))
+    (read-char stream)
+    result))
+
+(defun read-tag-name (stream)
+  (let ((result ""))
+    (loop for c = (read-char stream nil #\null)
+       until (or (char= c #\>) (char= c #\space) (char= c #\/))
+       do (setf result (concatenate 'string result (string c)))
+       finally (unread-char c stream))
+    result))
+
+(defun read-tag-content (stream)
+  (let ((result ""))
+    (loop for c = (read-char stream nil #\null)
+       do (setf result (concatenate 'string result (string c)))
+       until (or (char= (peek-char nil stream nil #\null) #\<)
+		 (char= (peek-char nil stream nil #\null) #\null)))
+    result))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;UTILITY MACRO FOR AUTO-ACCESS OF TEMPLATE WIDGETS;;;;;;;;;;;;;;;;;;;
+(defun widget-by-id (id root-widget)
+  (if root-widget
+      (car (map-widget root-widget
+		       (lambda (widget)
+			 (if (and (widgetp widget) (string= (%id widget) id))
+			     widget
+			     nil))))))
+
+(defmacro with-template ((template-name) &body body)
+  (let* ((template (funcall (get-template template-name)))
+	 (temp-symb (intern (string-upcase (concatenate 'string "=" (symbol-name template-name) "="))))
+	 (widget-list (map-widget template (lambda (w)
+					     (if (and (widgetp w) (%template-access w))
+						 `(,(intern (string-upcase (%id w))) (widget-by-id ,(%id w) ,temp-symb))
+						 nil)))))
+    `(let* ((,temp-symb (funcall (get-template ',template-name)))
+	    ,@widget-list)
+       (declare (ignorable ,@(mapcar #'car widget-list)))
+       ,@body)))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;DEFINE LAYERED METHOD AND RELATED SEXML CODES;;;;;;;;;;;;;;;;;;;;;;;
 
 (defun setup-sexml-objects (dtd-path target-package inherit-list)

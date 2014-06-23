@@ -1,12 +1,13 @@
 
 CL-BINDS
 
-Allows binding object A to object B so the object A's slots
-will act like they are from object B, reading and writing to object B.
-This is usefull when you have something like a text box that should display 
-and edit a slot like username from an object like a user object. To ease up 
-things you can simply bind the value slot of the text box to username slot
-of the user object and its done. no need to do it by hand!
+Allows binding object A to object B so the object A's slots will act
+like they are from object B, reading and writing to object B.  This is
+usefull when you have something like a text box that should display
+and edit a slot like username from an object like a user object. To
+ease up things you can simply bind the value slot of the text box to
+username slot of the user object and its done. no need to do it by
+hand!
 
 -----------------------------------------------------------------------
 
@@ -89,7 +90,8 @@ NIL  ;; binding removed, everything is back to normal now.
 
 Contact Info
 
-If u find bugs or have any idea about making cl-binds better please contact me at
+If u find bugs or have any idea about making cl-binds better please
+contact me at:
 
 farzadbekran@gmail.com
 
@@ -98,21 +100,22 @@ farzadbekran@gmail.com
 Copyright (c) 2012 Farzad Bekran
 
 
-Permission is hereby granted, free of charge, to any person obtaining a copy of this
-software and associated documentation files (the "Software"), to deal in the Software
-without restriction, including without limitation the rights to use, copy, modify, 
-merge, publish, distribute, sublicense, and/or sell copies of the Software, and to 
-permit persons to whom the Software is furnished to do so, subject to the following 
-conditions:
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of this software and associated documentation files (the
+"Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish,
+distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so, subject to
+the following conditions:
 
-The above copyright notice and this permission notice shall be included in all copies 
-or substantial portions of the Software.
+The above copyright notice and this permission notice shall be
+included in all copies or substantial portions of the Software.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, 
-INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A 
-PARTICULAR PURPOSE AND NONINFRINGEMENT. 
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
 
-IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES
-OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING 
-FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE 
-SOFTWARE.
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
